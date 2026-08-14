@@ -32,7 +32,7 @@
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-refresh": "latest",
     "globals": "latest",
-    "jsdom": "26.1.0",
+    "jsdom": "30.0.1",
     "typescript": "latest",
     "typescript-eslint": "latest",
     "vite": "latest",
