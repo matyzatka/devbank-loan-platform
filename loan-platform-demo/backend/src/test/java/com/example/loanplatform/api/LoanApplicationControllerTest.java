@@ -181,8 +181,8 @@ class LoanApplicationControllerTest {
                 UUID.fromString(id),
                 "worker-test-request",
                 UUID.randomUUID());
-        var approved = postAction("/api/v1/applications/" + id + "/approve");
-        var invalid = postAction("/api/v1/applications/" + id + "/reject");
+        var approved = postAction("/api/v1/applications/" + id + "/approve", 1);
+        var invalid = postAction("/api/v1/applications/" + id + "/reject", 2);
 
         assertThat(approved.statusCode()).isEqualTo(200);
         assertThat(json(approved).get("status").asText()).isEqualTo("APPROVED");
@@ -190,6 +190,20 @@ class LoanApplicationControllerTest {
         assertProblem(invalid, "BUSINESS_CONFLICT");
         assertThat(dsl.fetchCount(table("outbox_event"))).isEqualTo(3);
         assertThat(dsl.fetchCount(table("loan_application_status_history"))).isEqualTo(3);
+    }
+
+    @Test
+    void rejectsDecisionMadeFromAStaleApplicationVersion() throws Exception {
+        var created = json(create("api-stale-version-001", validRequest()));
+        var id = UUID.fromString(created.get("id").asText());
+        service.startReviewFromWorker(id, "worker-test-request", UUID.randomUUID());
+
+        var staleDecision = postAction("/api/v1/applications/" + id + "/approve", 0);
+
+        assertThat(staleDecision.statusCode()).isEqualTo(409);
+        assertProblem(staleDecision, "BUSINESS_CONFLICT");
+        assertThat(json(get("/api/v1/applications/" + id)).get("status").asText())
+                .isEqualTo("UNDER_REVIEW");
     }
 
     @Test
@@ -225,9 +239,11 @@ class LoanApplicationControllerTest {
         return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> postAction(String path) throws Exception {
+    private HttpResponse<String> postAction(String path, long expectedVersion) throws Exception {
         var request = HttpRequest.newBuilder(uri(path))
-                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"expectedVersion\":%d}".formatted(expectedVersion)))
                 .build();
         return http.send(request, HttpResponse.BodyHandlers.ofString());
     }

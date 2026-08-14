@@ -89,14 +89,18 @@ public class LoanApplicationController {
 
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve an application under review")
-    public LoanApplicationResponse approve(@PathVariable UUID id) {
-        return transitionCompleted(service.approve(id));
+    public LoanApplicationResponse approve(
+            @PathVariable UUID id,
+            @Valid @RequestBody TransitionLoanApplicationRequest request) {
+        return transitionCompleted(service.approve(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/reject")
     @Operation(summary = "Reject an application under review")
-    public LoanApplicationResponse reject(@PathVariable UUID id) {
-        return transitionCompleted(service.reject(id));
+    public LoanApplicationResponse reject(
+            @PathVariable UUID id,
+            @Valid @RequestBody TransitionLoanApplicationRequest request) {
+        return transitionCompleted(service.reject(id, request.expectedVersion()));
     }
 
     private static LoanApplicationResponse transitionCompleted(

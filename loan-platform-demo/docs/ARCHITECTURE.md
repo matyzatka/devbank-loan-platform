@@ -32,7 +32,11 @@
 7. It changes the state to `UNDER_REVIEW`, increments `version`, and writes the audit entry.
 8. The same transaction creates `LoanApplicationStatusChanged` in the outbox.
 9. Loan API publishes that follow-up event. The worker ignores it because it handles submitted events only.
-10. A user can approve or reject the application through Loan API.
+10. A user can approve or reject the application through Loan API, supplying the aggregate version displayed by the UI.
+
+## Operator command concurrency
+
+Approval and rejection commands carry `expectedVersion`. Loan API compares it with the persisted aggregate before applying the transition, and the repository also includes that version in its SQL update predicate. A stale UI therefore receives `409 Conflict` instead of deciding state that changed after the operator loaded it. The two checks serve different purposes: the service provides an explicit command contract, while the database predicate closes the race between read and write.
 
 ## Duplicate HTTP request
 

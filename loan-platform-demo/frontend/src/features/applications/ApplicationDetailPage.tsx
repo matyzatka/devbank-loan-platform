@@ -22,7 +22,7 @@ export function ApplicationDetailPage() {
     refetchInterval: query => query.state.data?.status === 'SUBMITTED' ? 1_500 : false,
   })
   const transition = useMutation({
-    mutationFn: (action: 'approve' | 'reject') => transitionApplication(applicationId, action),
+    mutationFn: (action: 'approve' | 'reject') => transitionApplication(applicationId, action, result.data!.version),
     onSuccess: updated => { queryClient.setQueryData(applicationKeys.detail(applicationId), updated); void queryClient.invalidateQueries({ queryKey: applicationKeys.all }) },
   })
 

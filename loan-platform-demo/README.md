@@ -85,7 +85,7 @@ Application creation stores `loan_application`, `idempotency_record`, the initia
 
 The publisher marks an event as published only after Kafka acknowledges it. If publication fails, the application remains committed and the event remains pending for a later retry. Delivery is **at least once**, not exactly once. The worker claims each `event_id` in `processed_event` in the same transaction as its processing result, state transition, audit entry, and follow-up outbox event, so duplicate deliveries do not repeat business side effects.
 
-Optimistic locking protects the aggregate through its `version` column. The domain model rejects invalid state transitions.
+Optimistic locking protects the aggregate through its `version` column. Approval and rejection commands carry the version observed by the UI, and SQL updates use the same value as a compare-and-set predicate. The domain model separately rejects invalid state transitions.
 
 ## Audit and traceability
 

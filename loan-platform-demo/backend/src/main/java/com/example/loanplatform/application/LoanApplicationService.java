@@ -122,27 +122,30 @@ public class LoanApplicationService {
                 application -> application.startReview(clock),
                 StatusChangeSource.WORKER,
                 requestId,
-                consumedEventId);
+                consumedEventId,
+                null);
     }
 
     @Transactional
-    public LoanApplication approve(UUID applicationId) {
+    public LoanApplication approve(UUID applicationId, long expectedVersion) {
         return changeStatus(
                 applicationId,
                 application -> application.approve(clock),
                 StatusChangeSource.API,
                 requestIds.currentOrGenerate(),
-                null);
+                null,
+                expectedVersion);
     }
 
     @Transactional
-    public LoanApplication reject(UUID applicationId) {
+    public LoanApplication reject(UUID applicationId, long expectedVersion) {
         return changeStatus(
                 applicationId,
                 application -> application.reject(clock),
                 StatusChangeSource.API,
                 requestIds.currentOrGenerate(),
-                null);
+                null,
+                expectedVersion);
     }
 
     private LoanApplication changeStatus(
@@ -150,11 +153,15 @@ public class LoanApplicationService {
             Consumer<LoanApplication> transition,
             StatusChangeSource source,
             String requestId,
-            UUID causationEventId) {
+            UUID causationEventId,
+            Long requestedVersion) {
         // State, optimistic-lock update, audit history, and outbox append share this transaction.
         var application = get(applicationId);
         var previousStatus = application.getStatus();
         var expectedVersion = application.getVersion();
+        if (requestedVersion != null && requestedVersion != expectedVersion) {
+            throw new OptimisticLockingConflictException(applicationId, requestedVersion);
+        }
         transition.accept(application);
         applications.update(application, expectedVersion);
         var emittedEventId = appendStatusChanged(application, previousStatus);

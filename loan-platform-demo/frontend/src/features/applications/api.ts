@@ -35,6 +35,9 @@ export function createApplication(input: CreateApplicationInput) {
   })
 }
 
-export function transitionApplication(id: string, action: 'approve' | 'reject') {
-  return apiRequest<LoanApplication>(`/api/v1/applications/${id}/${action}`, { method: 'POST' })
+export function transitionApplication(id: string, action: 'approve' | 'reject', expectedVersion: number) {
+  return apiRequest<LoanApplication>(`/api/v1/applications/${id}/${action}`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedVersion }),
+  })
 }

@@ -178,7 +178,7 @@ class JooqLoanApplicationRepositoryTest {
 
         var reviewed = service.startReviewFromWorker(
                 created.getId(), "worker-test-request", UUID.randomUUID());
-        var approved = service.approve(created.getId());
+        var approved = service.approve(created.getId(), 1);
 
         assertThat(reviewed.getStatus()).isEqualTo(LoanApplicationStatus.UNDER_REVIEW);
         assertThat(approved.getStatus()).isEqualTo(LoanApplicationStatus.APPROVED);
