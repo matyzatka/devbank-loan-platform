@@ -13,7 +13,7 @@ This initial scaffold contains:
 - Docker and Compose placeholders;
 - reserved frontend, infrastructure, and documentation directories.
 
-The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer now provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. The broker, REST application API, frontend, and AWS infrastructure are deliberately not implemented yet.
+The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. The broker, frontend, and AWS infrastructure are deliberately not implemented yet.
 
 ## Proposed structure
 
@@ -56,6 +56,8 @@ mvn spring-boot:run
 ```
 
 Then request `http://localhost:8080/actuator/health`.
+
+OpenAPI JSON is available at `http://localhost:8080/v3/api-docs` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
 
 To build and run the placeholder container after creating the backend JAR:
 

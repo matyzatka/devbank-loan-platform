@@ -9,6 +9,13 @@ spring:
     sql-dialect: postgres
   flyway:
     locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
 
 management:
   endpoints:
