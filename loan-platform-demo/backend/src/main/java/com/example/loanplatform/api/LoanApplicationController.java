@@ -45,14 +45,14 @@ public class LoanApplicationController {
     }
 
     @PostMapping
-    @Operation(summary = "Submit a corporate loan application")
+    @Operation(summary = "Založit žádost o korporátní úvěr")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Application created or original idempotent response returned"),
-            @ApiResponse(responseCode = "400", description = "Request validation failed"),
-            @ApiResponse(responseCode = "409", description = "Idempotency key conflicts with a previous request")
+            @ApiResponse(responseCode = "201", description = "Žádost byla vytvořena nebo vrácena z idempotentního požadavku"),
+            @ApiResponse(responseCode = "400", description = "Validace požadavku selhala"),
+            @ApiResponse(responseCode = "409", description = "Idempotency key koliduje s dřívějším požadavkem")
     })
     public ResponseEntity<LoanApplicationResponse> create(
-            @Parameter(required = true, description = "Unique key for safely retrying the request")
+            @Parameter(required = true, description = "Unikátní klíč pro bezpečné opakování požadavku")
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateLoanApplicationRequest request) {
         var application = service.create(new CreateLoanApplicationCommand(
@@ -72,13 +72,13 @@ public class LoanApplicationController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Retrieve a loan application")
+    @Operation(summary = "Načíst detail úvěrové žádosti")
     public LoanApplicationResponse get(@PathVariable UUID id) {
         return LoanApplicationResponse.from(service.get(id));
     }
 
     @GetMapping("/{id}/processing")
-    @Operation(summary = "Retrieve preliminary processing and status audit history")
+    @Operation(summary = "Načíst výsledek předběžné kontroly a auditní historii")
     public ApplicationProcessingResponse getProcessing(@PathVariable UUID id) {
         try (var ignored = MDC.putCloseable("applicationId", id.toString())) {
             return ApplicationProcessingResponse.from(service.getProcessingDetails(id));
@@ -86,7 +86,7 @@ public class LoanApplicationController {
     }
 
     @GetMapping
-    @Operation(summary = "List and filter loan applications")
+    @Operation(summary = "Vypsat a filtrovat úvěrové žádosti")
     public LoanApplicationPageResponse list(
             @RequestParam(required = false) LoanApplicationStatus status,
             @RequestParam(required = false) String query,
@@ -96,7 +96,7 @@ public class LoanApplicationController {
     }
 
     @PostMapping("/{id}/approve")
-    @Operation(summary = "Approve an application under review")
+    @Operation(summary = "Schválit posuzovanou žádost")
     public LoanApplicationResponse approve(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionLoanApplicationRequest request) {
@@ -106,12 +106,12 @@ public class LoanApplicationController {
     }
 
     @PostMapping("/{id}/reject")
-    @Operation(summary = "Reject an application under review")
+    @Operation(summary = "Zamítnout posuzovanou žádost")
     public LoanApplicationResponse reject(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionLoanApplicationRequest request) {
         try (var ignored = MDC.putCloseable("applicationId", id.toString())) {
-            return transitionCompleted(service.reject(id, request.expectedVersion()));
+            return transitionCompleted(service.reject(id, request.expectedVersion(), request.reason()));
         }
     }
 

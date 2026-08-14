@@ -11,16 +11,16 @@ import java.math.BigDecimal;
 
 /** Validated wire contract for creating a corporate loan application. */
 public record CreateLoanApplicationRequest(
-        @NotBlank
-        @Size(max = 100)
+        @NotBlank(message = "Zadejte název firemního klienta.")
+        @Size(max = 100, message = "Název může obsahovat nejvýše 100 znaků.")
         String customerId,
 
-        @NotNull
-        @DecimalMin(value = "0.01")
-        @Digits(integer = 17, fraction = 2)
+        @NotNull(message = "Zadejte požadovanou částku.")
+        @DecimalMin(value = "0.01", message = "Částka musí být vyšší než nula.")
+        @Digits(integer = 17, fraction = 2, message = "Částka má neplatný formát.")
         BigDecimal amount,
 
-        @NotBlank
-        @Pattern(regexp = "[A-Z]{3}", message = "must be a three-letter uppercase currency code")
+        @NotBlank(message = "Vyberte měnu.")
+        @Pattern(regexp = "[A-Z]{3}", message = "Měna musí být třípísmenný kód.")
         String currency) {
 }

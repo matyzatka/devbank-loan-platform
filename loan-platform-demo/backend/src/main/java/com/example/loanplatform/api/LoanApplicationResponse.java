@@ -14,6 +14,7 @@ public record LoanApplicationResponse(
         BigDecimal amount,
         String currency,
         LoanApplicationStatus status,
+        String rejectionReason,
         long version,
         Instant createdAt,
         Instant updatedAt) {
@@ -25,6 +26,7 @@ public record LoanApplicationResponse(
                 application.getAmount(),
                 application.getCurrency().getCurrencyCode(),
                 application.getStatus(),
+                application.getRejectionReason(),
                 application.getVersion(),
                 application.getCreatedAt(),
                 application.getUpdatedAt());

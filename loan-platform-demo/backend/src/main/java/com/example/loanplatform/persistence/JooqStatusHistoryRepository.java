@@ -34,6 +34,7 @@ public class JooqStatusHistoryRepository implements StatusHistoryRepository {
     private static final Field<String> CHANGED_BY = field(name("changed_by"), String.class);
     private static final Field<String> REQUEST_ID = field(name("request_id"), String.class);
     private static final Field<UUID> EVENT_ID = field(name("event_id"), UUID.class);
+    private static final Field<String> REASON = field(name("reason"), String.class);
 
     private final DSLContext dsl;
 
@@ -45,7 +46,7 @@ public class JooqStatusHistoryRepository implements StatusHistoryRepository {
     public List<StatusHistoryEntry> findByApplicationId(UUID applicationId) {
         return dsl.select(
                         ID, PREVIOUS_STATUS, NEW_STATUS, APPLICATION_VERSION,
-                        CHANGED_AT, CHANGED_BY, REQUEST_ID, EVENT_ID)
+                        CHANGED_AT, CHANGED_BY, REQUEST_ID, EVENT_ID, REASON)
                 .from(HISTORY)
                 .where(APPLICATION_ID.eq(applicationId))
                 .orderBy(CHANGED_AT.asc(), APPLICATION_VERSION.asc())
@@ -59,7 +60,8 @@ public class JooqStatusHistoryRepository implements StatusHistoryRepository {
                         record.get(CHANGED_AT).toInstant(),
                         StatusChangeSource.valueOf(record.get(CHANGED_BY)),
                         record.get(REQUEST_ID),
-                        record.get(EVENT_ID)));
+                        record.get(EVENT_ID),
+                        record.get(REASON)));
     }
 
     @Override
@@ -71,16 +73,17 @@ public class JooqStatusHistoryRepository implements StatusHistoryRepository {
             Instant changedAt,
             StatusChangeSource source,
             String requestId,
-            UUID eventId) {
+            UUID eventId,
+            String reason) {
         dsl.insertInto(HISTORY)
                 .columns(
                         ID, APPLICATION_ID, PREVIOUS_STATUS, NEW_STATUS, APPLICATION_VERSION,
-                        CHANGED_AT, CHANGED_BY, REQUEST_ID, EVENT_ID)
+                        CHANGED_AT, CHANGED_BY, REQUEST_ID, EVENT_ID, REASON)
                 .values(
                         UUID.randomUUID(), applicationId,
                         previousStatus == null ? null : previousStatus.name(), newStatus.name(),
                         applicationVersion, changedAt.atOffset(ZoneOffset.UTC), source.name(),
-                        requestId, eventId)
+                        requestId, eventId, reason)
                 .execute();
     }
 }

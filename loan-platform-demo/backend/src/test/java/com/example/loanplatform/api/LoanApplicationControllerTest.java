@@ -213,6 +213,20 @@ class LoanApplicationControllerTest {
     }
 
     @Test
+    void persistsRejectionReasonInApplicationAndAuditHistory() throws Exception {
+        var created = json(create("api-rejection-reason-001", validRequest()));
+        var id = created.get("id").asText();
+        service.startReviewFromWorker(UUID.fromString(id), "worker-test-request", UUID.randomUUID());
+
+        var rejected = postAction("/api/v1/applications/" + id + "/reject", 1);
+        var processing = json(get("/api/v1/applications/" + id + "/processing"));
+
+        assertThat(rejected.statusCode()).isEqualTo(200);
+        assertThat(json(rejected).get("rejectionReason").asText()).isEqualTo("Nedoložené finanční výkazy");
+        assertThat(processing.at("/statusHistory/2/reason").asText()).isEqualTo("Nedoložené finanční výkazy");
+    }
+
+    @Test
     void returnsNotFoundProblemForUnknownApplication() throws Exception {
         var response = get("/api/v1/applications/" + UUID.randomUUID());
 
@@ -226,7 +240,7 @@ class LoanApplicationControllerTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         var document = json(response);
-        assertThat(document.at("/info/title").asText()).isEqualTo("Loan Platform API");
+        assertThat(document.at("/info/title").asText()).isEqualTo("DevBank API");
         assertThat(document.at("/paths/~1api~1v1~1applications/post").isObject()).isTrue();
     }
 
@@ -249,7 +263,7 @@ class LoanApplicationControllerTest {
         var request = HttpRequest.newBuilder(uri(path))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"expectedVersion\":%d}".formatted(expectedVersion)))
+                        "{\"expectedVersion\":%d,\"reason\":\"Nedoložené finanční výkazy\"}".formatted(expectedVersion)))
                 .build();
         return http.send(request, HttpResponse.BodyHandlers.ofString());
     }

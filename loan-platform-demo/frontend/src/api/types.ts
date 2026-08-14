@@ -7,6 +7,7 @@ export interface LoanApplication {
   amount: number
   currency: string
   status: ApplicationStatus
+  rejectionReason: string | null
   version: number
   createdAt: string
   updatedAt: string
@@ -42,6 +43,7 @@ export interface StatusHistoryEntry {
   changedBy: 'API' | 'WORKER'
   requestId: string
   eventId: string | null
+  reason: string | null
 }
 
 export interface ApplicationProcessing {

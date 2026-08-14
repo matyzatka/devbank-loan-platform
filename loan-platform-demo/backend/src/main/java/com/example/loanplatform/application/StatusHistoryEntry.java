@@ -14,5 +14,6 @@ public record StatusHistoryEntry(
         Instant changedAt,
         StatusChangeSource changedBy,
         String requestId,
-        UUID eventId) {
+        UUID eventId,
+        String reason) {
 }

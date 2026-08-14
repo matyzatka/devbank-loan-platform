@@ -97,7 +97,7 @@ class LoanApplicationTest {
         return Stream.of(
                 Arguments.of((Consumer<LoanApplication>) application -> application.approve(CHANGED_AT),
                         LoanApplicationStatus.APPROVED),
-                Arguments.of((Consumer<LoanApplication>) application -> application.reject(CHANGED_AT),
+                Arguments.of((Consumer<LoanApplication>) application -> application.reject("Nedoložené podklady", CHANGED_AT),
                         LoanApplicationStatus.REJECTED));
     }
 
@@ -106,11 +106,11 @@ class LoanApplicationTest {
                 Arguments.of(LoanApplicationStatus.SUBMITTED, LoanApplicationStatus.APPROVED,
                         (Consumer<LoanApplication>) application -> application.approve(CHANGED_AT)),
                 Arguments.of(LoanApplicationStatus.SUBMITTED, LoanApplicationStatus.REJECTED,
-                        (Consumer<LoanApplication>) application -> application.reject(CHANGED_AT)),
+                        (Consumer<LoanApplication>) application -> application.reject("Nedoložené podklady", CHANGED_AT)),
                 Arguments.of(LoanApplicationStatus.UNDER_REVIEW, LoanApplicationStatus.UNDER_REVIEW,
                         (Consumer<LoanApplication>) application -> application.startReview(CHANGED_AT)),
                 Arguments.of(LoanApplicationStatus.APPROVED, LoanApplicationStatus.REJECTED,
-                        (Consumer<LoanApplication>) application -> application.reject(CHANGED_AT)),
+                        (Consumer<LoanApplication>) application -> application.reject("Nedoložené podklady", CHANGED_AT)),
                 Arguments.of(LoanApplicationStatus.REJECTED, LoanApplicationStatus.APPROVED,
                         (Consumer<LoanApplication>) application -> application.approve(CHANGED_AT)));
     }
@@ -133,7 +133,7 @@ class LoanApplicationTest {
         if (status == LoanApplicationStatus.APPROVED) {
             application.approve(CHANGED_AT);
         } else if (status == LoanApplicationStatus.REJECTED) {
-            application.reject(CHANGED_AT);
+            application.reject("Nedoložené podklady", CHANGED_AT);
         }
         return application;
     }

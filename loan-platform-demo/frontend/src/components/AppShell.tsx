@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Landmark, LogOut, Menu, Search } from 'lucide-react'
+import { Landmark, Menu } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 /** Persistent operations workspace shared by all loan-management routes. */
@@ -7,16 +7,13 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => void navigate('/applications')} aria-label="LoanFlow domů">
+        <button className="brand" onClick={() => void navigate('/applications')} aria-label="DevBank domů">
           <span className="brand-mark"><Landmark size={23} strokeWidth={2.4} /></span>
-          <span><strong>LoanFlow</strong><small>Firemní úvěry</small></span>
+          <span><strong>DevBank</strong><small>KORPORÁTNÍ ÚVĚRY</small></span>
         </button>
-        <div className="topbar-context"><span className="environment-dot" /> Interní pracovní prostředí</div>
+        <div className="topbar-context"><span className="environment-dot" /> DEMO PROSTŘEDÍ</div>
         <div className="topbar-actions">
-          <button className="icon-button" aria-label="Vyhledat"><Search size={18} /></button>
-          <button className="icon-button has-notice" aria-label="Oznámení"><Bell size={18} /></button>
-          <button className="user-menu"><span className="avatar">MK</span><span className="user-copy"><strong>Martin K.</strong><small>Úvěrový specialista</small></span><ChevronDown size={15} /></button>
-          <button className="icon-button desktop-only" aria-label="Odhlásit"><LogOut size={18} /></button>
+          <div className="user-menu"><span className="avatar">MZ</span><span className="user-copy"><strong>Matouš Zátka</strong><small>Úvěrový poradce</small></span></div>
         </div>
       </header>
       <nav className="primary-nav" aria-label="Hlavní navigace">
@@ -27,7 +24,6 @@ export function AppShell() {
         <span className="system-state"><span /> Systémy dostupné</span>
       </nav>
       <main className="workspace"><Outlet /></main>
-      <footer><span>LoanFlow • Portfolio demonstrátor</span><span>API v1 · Doručení alespoň jednou</span></footer>
     </div>
   )
 }

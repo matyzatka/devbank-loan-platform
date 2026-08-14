@@ -26,6 +26,7 @@ public final class LoanApplication {
     private LoanApplicationStatus status;
     private long version;
     private Instant updatedAt;
+    private String rejectionReason;
 
     private LoanApplication(
             UUID id,
@@ -61,7 +62,8 @@ public final class LoanApplication {
             LoanApplicationStatus status,
             long version,
             Instant createdAt,
-            Instant updatedAt) {
+            Instant updatedAt,
+            String rejectionReason) {
         // Restoration validates persistence data without replaying transitions or changing timestamps.
         var application = new LoanApplication(id, customerId, amount, currency, createdAt);
         application.status = Objects.requireNonNull(status, "status must not be null");
@@ -70,6 +72,12 @@ public final class LoanApplication {
         }
         application.version = version;
         application.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        application.rejectionReason = rejectionReason;
+        if (status == LoanApplicationStatus.REJECTED) {
+            application.rejectionReason = requireText(rejectionReason, "rejectionReason");
+        } else if (rejectionReason != null) {
+            throw new IllegalArgumentException("rejectionReason is only valid for rejected applications");
+        }
         if (updatedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("updatedAt must not be before createdAt");
         }
@@ -84,7 +92,8 @@ public final class LoanApplication {
         transitionTo(LoanApplicationStatus.APPROVED, clock);
     }
 
-    public void reject(Clock clock) {
+    public void reject(String reason, Clock clock) {
+        rejectionReason = requireText(reason, "rejectionReason").trim();
         transitionTo(LoanApplicationStatus.REJECTED, clock);
     }
 

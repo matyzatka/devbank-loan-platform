@@ -35,6 +35,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
     private static final Field<BigDecimal> AMOUNT = field(name("amount"), BigDecimal.class);
     private static final Field<String> CURRENCY = field(name("currency"), String.class);
     private static final Field<String> STATUS = field(name("status"), String.class);
+    private static final Field<String> REJECTION_REASON = field(name("rejection_reason"), String.class);
     private static final Field<Long> VERSION = field(name("version"), Long.class);
     private static final Field<OffsetDateTime> CREATED_AT = field(name("created_at"), OffsetDateTime.class);
     private static final Field<OffsetDateTime> UPDATED_AT = field(name("updated_at"), OffsetDateTime.class);
@@ -48,13 +49,14 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
     @Override
     public void insert(LoanApplication application) {
         dsl.insertInto(LOAN_APPLICATION)
-                .columns(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, VERSION, CREATED_AT, UPDATED_AT)
+                .columns(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, REJECTION_REASON, VERSION, CREATED_AT, UPDATED_AT)
                 .values(
                         application.getId(),
                         application.getCustomerId(),
                         application.getAmount(),
                         application.getCurrency().getCurrencyCode(),
                         application.getStatus().name(),
+                        application.getRejectionReason(),
                         application.getVersion(),
                         atUtc(application.getCreatedAt()),
                         atUtc(application.getUpdatedAt()))
@@ -66,6 +68,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
         // Version in the predicate turns this into a database-level compare-and-set operation.
         var affectedRows = dsl.update(LOAN_APPLICATION)
                 .set(STATUS, application.getStatus().name())
+                .set(REJECTION_REASON, application.getRejectionReason())
                 .set(VERSION, application.getVersion())
                 .set(UPDATED_AT, atUtc(application.getUpdatedAt()))
                 .where(ID.eq(application.getId()))
@@ -79,7 +82,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
 
     @Override
     public Optional<LoanApplication> findById(UUID id) {
-        return dsl.select(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, VERSION, CREATED_AT, UPDATED_AT)
+        return dsl.select(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, REJECTION_REASON, VERSION, CREATED_AT, UPDATED_AT)
                 .from(LOAN_APPLICATION)
                 .where(ID.eq(id))
                 .fetchOptional(this::toDomain);
@@ -91,7 +94,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
             String query,
             int offset,
             int limit) {
-        return dsl.select(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, VERSION, CREATED_AT, UPDATED_AT)
+        return dsl.select(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, REJECTION_REASON, VERSION, CREATED_AT, UPDATED_AT)
                 .from(LOAN_APPLICATION)
                 .where(filters(requestedStatus, query))
                 .orderBy(UPDATED_AT.desc(), ID.desc())
@@ -127,7 +130,8 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
                 LoanApplicationStatus.valueOf(record.get(STATUS)),
                 record.get(VERSION),
                 toInstant(record.get(CREATED_AT)),
-                toInstant(record.get(UPDATED_AT)));
+                toInstant(record.get(UPDATED_AT)),
+                record.get(REJECTION_REASON));
     }
 
     private static OffsetDateTime atUtc(Instant instant) {

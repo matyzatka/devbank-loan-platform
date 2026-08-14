@@ -19,5 +19,6 @@ public interface StatusHistoryRepository {
             Instant changedAt,
             StatusChangeSource source,
             String requestId,
-            UUID eventId);
+            UUID eventId,
+            String reason);
 }

@@ -52,6 +52,7 @@ services:
       LOAN_PLATFORM_API_ENABLED: "true"
       LOAN_PLATFORM_WORKER_ENABLED: "false"
       LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED: "true"
+      LOAN_PLATFORM_DEMO_DATA_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy

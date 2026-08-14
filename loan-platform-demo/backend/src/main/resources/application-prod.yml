@@ -6,5 +6,9 @@ logging:
 springdoc:
   api-docs:
     enabled: false
+
+loan-platform:
+  demo-data:
+    enabled: false
   swagger-ui:
     enabled: false

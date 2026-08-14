@@ -92,7 +92,7 @@ public class LoanApplicationService {
         statusHistory.append(
                 application.getId(), null, application.getStatus(), application.getVersion(),
                 application.getCreatedAt(), StatusChangeSource.API,
-                requestIds.currentOrGenerate(), eventId);
+                requestIds.currentOrGenerate(), eventId, null);
         return application;
     }
 
@@ -145,6 +145,7 @@ public class LoanApplicationService {
                 StatusChangeSource.WORKER,
                 requestId,
                 consumedEventId,
+                null,
                 null);
     }
 
@@ -156,18 +157,24 @@ public class LoanApplicationService {
                 StatusChangeSource.API,
                 requestIds.currentOrGenerate(),
                 null,
-                expectedVersion);
+                expectedVersion,
+                null);
     }
 
     @Transactional
-    public LoanApplication reject(UUID applicationId, long expectedVersion) {
+    public LoanApplication reject(UUID applicationId, long expectedVersion, String reason) {
+        var rejectionReason = requireText(reason, "reason").trim();
+        if (rejectionReason.length() > 500) {
+            throw new IllegalArgumentException("reason must not exceed 500 characters");
+        }
         return changeStatus(
                 applicationId,
-                application -> application.reject(clock),
+                application -> application.reject(rejectionReason, clock),
                 StatusChangeSource.API,
                 requestIds.currentOrGenerate(),
                 null,
-                expectedVersion);
+                expectedVersion,
+                rejectionReason);
     }
 
     private LoanApplication changeStatus(
@@ -176,7 +183,8 @@ public class LoanApplicationService {
             StatusChangeSource source,
             String requestId,
             UUID causationEventId,
-            Long requestedVersion) {
+            Long requestedVersion,
+            String reason) {
         // State, optimistic-lock update, audit history, and outbox append share this transaction.
         var application = get(applicationId);
         var previousStatus = application.getStatus();
@@ -190,7 +198,7 @@ public class LoanApplicationService {
         statusHistory.append(
                 application.getId(), previousStatus, application.getStatus(), application.getVersion(),
                 application.getUpdatedAt(), source, requestId,
-                causationEventId == null ? emittedEventId : causationEventId);
+                causationEventId == null ? emittedEventId : causationEventId, reason);
         log.info(
                 "Application state persisted: applicationId={}, from={}, to={}, version={}, source={}, eventId={}",
                 application.getId(), previousStatus, application.getStatus(), application.getVersion(),

@@ -1,87 +1,82 @@
-# Loan Platform Demo — Project Brief
+# DevBank — produktový a architektonický brief
 
-## Purpose
+## Účel
 
-A small, realistic, and interview-ready Java/React portfolio demonstrator for a banking environment. It must not use proprietary data, code, assets, or terminology from a real employer.
+DevBank je profesionální portfolio demonstrátor platformy pro zpracování korporátních úvěrů. Neobsahuje reálná klientská data, proprietární zdrojový kód ani identitu skutečné banky. Nejde o skutečný úvěrový scoring.
 
-## Business scenario
+## Produktová identita
 
-The system processes simplified corporate loan applications. It supports application creation and retrieval, idempotent command retries, a preliminary validation and process check performed by a worker, manual approval or rejection, state-change auditing, and reliable business-event publication.
+- název: **DevBank**;
+- podtitul: **KORPORÁTNÍ ÚVĚRY**;
+- přihlášený uživatel: **Matouš Zátka**;
+- role: **Úvěrový poradce**;
+- aplikace musí na každé obrazovce jasně uvádět, že jde o demo prostředí;
+- patička ani informace o autorství nejsou součástí produktu.
 
-This is not real credit scoring.
+## Jazyk
 
-## Technology baseline
+Veškeré uživatelské rozhraní, placeholdery, validační a API chyby, OpenAPI popisy, README a ostatní dokumentace jsou česky. Názvy tříd, endpointů, databázových objektů, eventů, technických identifikátorů a logovací zprávy mohou zůstat anglicky.
 
-- Java 21, Spring Boot, and Maven;
-- PostgreSQL, Flyway, and jOOQ;
-- a Kafka-compatible broker;
-- JUnit 5 and Testcontainers;
-- React, TypeScript, and Vite;
-- Docker and Docker Compose.
+## Produktový tok
 
-New technology is added only when it solves a concrete, implemented requirement.
+1. Založení žádosti.
+2. Předběžná automatická kontrola.
+3. Posouzení specialistou.
+4. Schválení nebo zamítnutí.
 
-## Domain model
+Stavový model: `SUBMITTED -> UNDER_REVIEW -> APPROVED | REJECTED`.
 
-`LoanApplication` contains `id`, `customerId`, `amount`, `currency`, `status`, `version`, `createdAt`, and `updatedAt`.
+Worker vlastní přechod do `UNDER_REVIEW`. Operátor smí rozhodnout pouze o žádosti ve stavu `UNDER_REVIEW`. Schválení i zamítnutí musí potvrdit v dialogu; zamítnutí vyžaduje důvod. Každá akce zobrazí jednoznačný výsledek a zachová idempotentní chování.
 
-Allowed workflow:
+## Obsah a prezentace
 
-```text
-SUBMITTED -> UNDER_REVIEW -> APPROVED | REJECTED
-```
+- používat pouze realistická fiktivní firemní data;
+- nepoužívat jména politiků, skutečných osob, testovací názvy ani nesmyslné částky;
+- technické verze nezobrazovat v hlavním seznamu;
+- audit zobrazit produktově, technické korelační údaje ponechat v rozbalitelném detailu;
+- pro CZK zobrazovat celé koruny, například `2 500 000 Kč`;
+- vstup částky formátovat česky, do API a databáze posílat číslo;
+- seznam, detail a formulář musí používat konzistentní formát částek.
 
-The processing worker owns the transition to `UNDER_REVIEW`. Invalid transitions must be rejected explicitly.
-
-## Runtime responsibilities
+## Odpovědnosti procesů
 
 ### Loan API
 
-- REST commands and queries;
-- primary application state;
-- HTTP idempotency;
-- one transaction for state, audit, and outbox;
-- outbox publication.
+- přijímá REST commandy a obsluhuje query endpointy;
+- spravuje hlavní stav žádosti a HTTP idempotenci;
+- ukládá stav, audit a outbox v jedné transakci;
+- publikuje události z transactional outboxu.
 
 ### Loan Processing Worker
 
-- consumes `LoanApplicationSubmitted`;
-- performs an idempotent preliminary validation and process check;
-- stores the result;
-- transitions the application to `UNDER_REVIEW`;
-- writes audit data and a follow-up business event.
+- konzumuje `LoanApplicationSubmitted`;
+- provádí idempotentní předběžnou validační a procesní kontrolu;
+- ukládá výsledek, posouvá žádost do `UNDER_REVIEW` a zapisuje audit i navazující event.
 
-The roles may share one repository, artifact, and database, but run as separate processes.
+Procesy mohou sdílet repozitář, artefakt i PostgreSQL, ale jsou logicky oddělené a samostatně spustitelné.
 
-## Reliability
+## Spolehlivost a audit
 
-The project must demonstrate transaction boundaries, optimistic locking, HTTP idempotency, a transactional outbox, at-least-once delivery, event deduplication, retry/DLT behaviour, `requestId`/`applicationId`/`eventId` traceability, health checks, graceful shutdown, and failure before publication acknowledgement. It must not claim exactly-once processing.
+Projekt prokazuje transakční hranice, optimistic locking, HTTP idempotenci, transactional outbox, doručení alespoň jednou, deduplikaci eventů, retry/DLT chování a dohledatelnost přes `requestId`, `applicationId` a `eventId`. Netvrdí exactly-once zpracování.
 
-## Frontend
+Povinné testy pokrývají duplicitní HTTP request, duplicitní Kafka event, neplatný přechod, optimistic locking konflikt, pád před potvrzením publikace a souběžný start více seederů bez duplicit.
 
-The Czech-language UI allows an operator to create, filter, browse, approve, and reject applications; observe automatic preliminary processing; and see loading, empty, validation, and API-error states.
+## Demo data
 
-## Language policy
+Při lokálním spuštění se databáze doplní malou deterministickou sadou věrohodných fiktivních žádostí. Seeder je konfigurovatelný, v produkčním profilu vypnutý a bezpečný při souběžném startu více instancí. Používá stabilní identifikátory, databázový zámek, jednu transakci a konflikty ignoruje. Finální lokální sada nesmí obsahovat stará testovací data.
 
-Technical documentation, README files, code-level messages, logs, OpenAPI descriptions, and identifiers are English. Only user-facing UI copy is Czech.
+## Technologická hranice
 
-Unimplemented capabilities must be labelled **Proposed**. Simplifications must be labelled **Demo**.
+Základ tvoří Java 21, Spring Boot, Maven, PostgreSQL, Flyway, jOOQ, Kafka-compatible broker, JUnit 5, Testcontainers, React, TypeScript, Vite, Docker a Docker Compose. Další technologie se nepřidávají bez konkrétního důvodu. AWS není součástí tohoto rozsahu.
 
-## Cloud boundary
+Lokální tok musí být funkční a otestovaný: `API -> PostgreSQL -> outbox -> Kafka -> worker -> změna stavu`.
 
-AWS is a later, separately approved milestone. Nothing is deployed or created without explicit approval. The following local flow must be functional and tested first:
+## Definice hotového řešení
 
-```text
-API -> PostgreSQL -> outbox -> Kafka -> worker -> state transition
-```
-
-## Definition of done
-
-- Loan API and worker run as separate processes;
-- the primary flow works end to end;
-- duplicate, invalid-transition, optimistic-locking, and publication-failure tests pass;
-- audit history is queryable;
-- frontend behaviour reflects the actual workflow;
-- Docker Compose starts the complete local system;
-- English technical documentation explains the implementation and its limitations;
-- Czech remains limited to user-facing UI copy.
+- API a worker běží jako dva procesy a hlavní tok funguje end-to-end;
+- workflow odmítá neplatné přechody a důvod zamítnutí je uložen a auditovatelný;
+- auditní historie je dostupná v UI;
+- UI odpovídá čtyřkrokovému toku a je celé česky;
+- Compose spustí kompletní lokální systém;
+- povinné testy, frontend lint a oba buildy projdou;
+- demo data jsou realistická, deterministická a bezpečná pro více instancí.

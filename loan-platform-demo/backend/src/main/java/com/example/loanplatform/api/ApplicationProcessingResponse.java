@@ -40,13 +40,14 @@ public record ApplicationProcessingResponse(
             Instant changedAt,
             StatusChangeSource changedBy,
             String requestId,
-            UUID eventId) {
+            UUID eventId,
+            String reason) {
 
         private static StatusHistoryResponse from(
                 com.example.loanplatform.application.StatusHistoryEntry entry) {
             return new StatusHistoryResponse(
                     entry.id(), entry.previousStatus(), entry.newStatus(), entry.applicationVersion(),
-                    entry.changedAt(), entry.changedBy(), entry.requestId(), entry.eventId());
+                    entry.changedAt(), entry.changedBy(), entry.requestId(), entry.eventId(), entry.reason());
         }
     }
 }

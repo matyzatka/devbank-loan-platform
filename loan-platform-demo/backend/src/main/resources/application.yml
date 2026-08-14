@@ -36,6 +36,8 @@ loan-platform:
     enabled: true
   worker:
     enabled: false
+  demo-data:
+    enabled: false
   kafka:
     enabled: true
   events:

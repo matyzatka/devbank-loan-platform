@@ -30,7 +30,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(LoanApplicationNotFoundException.class)
     ProblemDetail handleNotFound(LoanApplicationNotFoundException exception) {
-        return problem(HttpStatus.NOT_FOUND, "APPLICATION_NOT_FOUND", exception.getMessage());
+        return problem(HttpStatus.NOT_FOUND, "APPLICATION_NOT_FOUND", "Požadovaná úvěrová žádost nebyla nalezena.");
     }
 
     @ExceptionHandler({
@@ -41,13 +41,18 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail handleConflict(RuntimeException exception) {
         log.warn("Business command rejected: exceptionType={}, reason={}",
                 exception.getClass().getSimpleName(), exception.getMessage());
-        return problem(HttpStatus.CONFLICT, "BUSINESS_CONFLICT", exception.getMessage());
+        var detail = exception instanceof OptimisticLockingConflictException
+                ? "Žádost mezitím změnil jiný uživatel. Obnovte stránku a akci zopakujte."
+                : exception instanceof InvalidLoanApplicationTransitionException
+                ? "Požadovaná změna není v aktuálním stavu žádosti povolena."
+                : "Požadavek nelze dokončit, protože koliduje s dříve zpracovaným požadavkem.";
+        return problem(HttpStatus.CONFLICT, "BUSINESS_CONFLICT", detail);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail handleBadRequest(IllegalArgumentException exception) {
         log.debug("Invalid request rejected: reason={}", exception.getMessage());
-        return problem(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage());
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Požadavek obsahuje neplatné údaje.");
     }
 
     @Override
@@ -59,7 +64,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         var detail = problem(
                 HttpStatus.BAD_REQUEST,
                 "VALIDATION_FAILED",
-                "Request validation failed");
+                "Zkontrolujte označená pole a požadavek odešlete znovu.");
         List<Map<String, String>> violations = exception.getBindingResult()
                 .getFieldErrors()
                 .stream()
@@ -72,12 +77,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private static Map<String, String> violation(FieldError error) {
         return Map.of(
                 "field", error.getField(),
-                "message", error.getDefaultMessage() == null ? "invalid value" : error.getDefaultMessage());
+                "message", error.getDefaultMessage() == null ? "Neplatná hodnota." : error.getDefaultMessage());
     }
 
     private static ProblemDetail problem(HttpStatus status, String code, String detail) {
         var problem = ProblemDetail.forStatusAndDetail(status, detail);
-        problem.setTitle(status.getReasonPhrase());
+        problem.setTitle(switch (status) {
+            case BAD_REQUEST -> "Neplatný požadavek";
+            case NOT_FOUND -> "Žádost nenalezena";
+            case CONFLICT -> "Požadavek je v konfliktu";
+            default -> "Požadavek se nepodařilo zpracovat";
+        });
         problem.setType(URI.create("https://loan-platform.example/problems/" + code.toLowerCase()));
         problem.setProperty("code", code);
         var correlationId = MDC.get(CorrelationIds.MDC_KEY);
