@@ -34,7 +34,11 @@ import static org.jooq.impl.DSL.table;
 @Testcontainers
 @SpringBootTest(
         classes = LoanPlatformApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+                "loan-platform.kafka.enabled=false",
+                "loan-platform.outbox.publisher-enabled=false"
+        })
 class JooqLoanApplicationRepositoryTest {
 
     private static final Clock SUBMITTED_AT = fixedClock("2026-08-14T10:00:00Z");

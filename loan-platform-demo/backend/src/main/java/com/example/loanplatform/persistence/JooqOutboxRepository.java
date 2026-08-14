@@ -1,6 +1,7 @@
 package com.example.loanplatform.persistence;
 
 import com.example.loanplatform.application.OutboxRepository;
+import com.example.loanplatform.application.PendingOutboxEvent;
 import com.example.loanplatform.domain.event.LoanApplicationEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +13,9 @@ import org.jooq.Table;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.jooq.impl.DSL.field;
@@ -29,6 +32,8 @@ public class JooqOutboxRepository implements OutboxRepository {
     private static final Field<Integer> SCHEMA_VERSION = field(name("schema_version"), Integer.class);
     private static final Field<JSONB> PAYLOAD = field(name("payload"), JSONB.class);
     private static final Field<OffsetDateTime> OCCURRED_AT = field(name("occurred_at"), OffsetDateTime.class);
+    private static final Field<OffsetDateTime> PUBLISHED_AT = field(name("published_at"), OffsetDateTime.class);
+    private static final Field<Integer> PUBLISH_ATTEMPTS = field(name("publish_attempts"), Integer.class);
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
@@ -52,11 +57,60 @@ public class JooqOutboxRepository implements OutboxRepository {
                 .execute();
     }
 
+    @Override
+    public List<PendingOutboxEvent> lockUnpublished(int batchSize) {
+        return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, PUBLISH_ATTEMPTS)
+                .from(OUTBOX)
+                .where(PUBLISHED_AT.isNull())
+                .orderBy(OCCURRED_AT, ID)
+                .limit(batchSize)
+                .forUpdate()
+                .skipLocked()
+                .fetch(record -> new PendingOutboxEvent(
+                        record.get(ID),
+                        record.get(AGGREGATE_ID),
+                        record.get(EVENT_TYPE),
+                        record.get(PAYLOAD).data(),
+                        record.get(OCCURRED_AT).toInstant(),
+                        record.get(PUBLISH_ATTEMPTS)));
+    }
+
+    @Override
+    public void recordPublishAttempt(UUID eventId) {
+        dsl.update(OUTBOX)
+                .set(PUBLISH_ATTEMPTS, PUBLISH_ATTEMPTS.plus(1))
+                .where(ID.eq(eventId))
+                .execute();
+    }
+
+    @Override
+    public void markPublished(UUID eventId, Instant publishedAt) {
+        dsl.update(OUTBOX)
+                .set(PUBLISHED_AT, publishedAt.atOffset(ZoneOffset.UTC))
+                .where(ID.eq(eventId))
+                .execute();
+    }
+
     private String toJson(LoanApplicationEvent event) {
         try {
-            return objectMapper.writeValueAsString(event);
+            return objectMapper.writeValueAsString(new EventEnvelope(
+                    event.eventId(),
+                    event.applicationId(),
+                    event.eventType(),
+                    event.schemaVersion(),
+                    event.occurredAt(),
+                    event));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize outbox event " + event.eventId(), exception);
         }
+    }
+
+    private record EventEnvelope(
+            UUID eventId,
+            UUID applicationId,
+            String eventType,
+            int eventVersion,
+            Instant timestamp,
+            LoanApplicationEvent payload) {
     }
 }

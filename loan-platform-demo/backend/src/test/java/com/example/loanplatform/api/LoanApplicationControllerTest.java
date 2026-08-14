@@ -26,7 +26,11 @@ import static org.jooq.impl.DSL.table;
 @Testcontainers
 @SpringBootTest(
         classes = LoanPlatformApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "loan-platform.kafka.enabled=false",
+                "loan-platform.outbox.publisher-enabled=false"
+        })
 class LoanApplicationControllerTest {
 
     @Container

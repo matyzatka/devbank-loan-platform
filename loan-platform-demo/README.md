@@ -13,7 +13,7 @@ This initial scaffold contains:
 - Docker and Compose placeholders;
 - reserved frontend, infrastructure, and documentation directories.
 
-The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. The broker, frontend, and AWS infrastructure are deliberately not implemented yet.
+The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. An outbox publisher delivers committed events to a local Apache Kafka broker and an idempotent consumer records them. The frontend and AWS infrastructure are deliberately not implemented yet.
 
 ## Proposed structure
 
@@ -39,7 +39,6 @@ loan-platform-demo/
 
 The backend currently uses Spring Web, Actuator, Spring Boot Test, and Lombok. Lombok is deliberately restricted: `@Getter` removes mechanical aggregate accessors, while `@Data`, experimental features, and `@SneakyThrows` are forbidden in `lombok.config`. Later milestones are expected to add dependencies only when their capability is implemented:
 
-- Spring Kafka plus a Kafka-compatible Compose broker for event integration;
 - springdoc-openapi for API documentation;
 - Testcontainers PostgreSQL and Kafka modules for integration testing.
 
@@ -58,6 +57,14 @@ mvn spring-boot:run
 Then request `http://localhost:8080/actuator/health`.
 
 OpenAPI JSON is available at `http://localhost:8080/v3/api-docs` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
+
+## Event delivery semantics
+
+The publisher reads unpublished rows with `FOR UPDATE SKIP LOCKED`, publishes them to `loan-application-events`, and only then records `published_at`. Events for one application use the application ID as their Kafka key, preserving their order within a partition.
+
+Delivery is **at least once**, not exactly once. A process crash after Kafka accepts a record but before PostgreSQL commits `published_at` can cause the event to be sent again. The consumer claims the event ID in `processed_event` in the same transaction as its audit side effect, so duplicate deliveries do not repeat that side effect.
+
+Consumer failures are retried twice after the original attempt. After three total attempts, the record is published to `loan-application-events.DLT`.
 
 To build and run the placeholder container after creating the backend JAR:
 
