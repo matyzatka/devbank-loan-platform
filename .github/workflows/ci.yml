@@ -67,12 +67,43 @@ jobs:
       - name: Build production frontend
         run: npm run build
 
+  infrastructure:
+    name: Infrastructure · CDK synth only
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/cdk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 22 and npm cache
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: infra/cdk/package-lock.json
+
+      - name: Install locked infrastructure dependencies
+        run: npm ci
+
+      - name: Type-check CDK application
+        run: npm run build
+
+      - name: Verify architecture guardrails
+        run: npm test
+
+      - name: Synthesize CloudFormation template
+        run: npm run synth -- --quiet
+
   docker:
     name: Docker images · ${{ github.sha }}
     runs-on: ubuntu-latest
     needs:
       - backend
       - frontend
+      - infrastructure
 
     steps:
       - name: Checkout repository

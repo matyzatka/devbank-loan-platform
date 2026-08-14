@@ -3,6 +3,7 @@
 *.iml
 backend/target/
 **/node_modules/
+**/cdk.out/
 frontend/dist/
 frontend/.npm-cache/
 frontend/*.tsbuildinfo

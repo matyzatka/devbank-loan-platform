@@ -23,6 +23,7 @@ DevBank zpracovává žádosti o korporátní úvěry od založení přes automa
 | **Audit a end-to-end korelace** | `requestId`, `applicationId` a `eventId` propojují HTTP, outbox, Kafka consumer i auditní historii bez logování celého citlivého payloadu. | [correlation filter](backend/src/main/java/dev/bank/loanplatform/api/CorrelationIdFilter.java), [strukturované logování](backend/src/main/resources/application-prod.yml) |
 | **Provozní signály, ne pouze technické logy** | Readiness/liveness, graceful shutdown, počet čekajících eventů a stáří nejstaršího outbox záznamu poskytují měřitelné signály pro rollout a alerting. | [Actuator konfigurace](backend/src/main/resources/application.yml), [outbox metriky](backend/src/main/java/dev/bank/loanplatform/messaging/OutboxMetrics.java) |
 | **Reprodukovatelnost od checkoutu po event flow** | Flyway verzovaně vytvoří schéma, multi-stage image běží pod neprivilegovaným uživatelem a CI ověří testy, oba image i celý asynchronní tok. | [migrace](backend/src/main/resources/db/migration), [backend image](backend/Dockerfile), [CI](.github/workflows/ci.yml), [smoke test](scripts/smoke-test.ps1) |
+| **Cloudový návrh jako testovaný artefakt** | CDK skeleton syntetizuje privátní RDS/ECS topologii a automaticky zakazuje NAT, EFS, MSK, autoscaling, veřejnou DB a Multi-AZ režim ukázkové varianty. | [CDK stack](infra/cdk/lib/devbank-demo-stack.ts), [guardrail test](infra/cdk/test/guardrails.ts), [AWS architektura](docs/aws-architecture.md) |
 
 ```mermaid
 flowchart LR
@@ -57,4 +58,18 @@ Kompletní automatizovaný smoke test:
 
 ## Dokumentace
 
-[Dokumentační rozcestník](docs/README.md) odděluje produktový kontext, aplikační architekturu, lokální provoz a návrh AWS nasazení. Cloudová část popisuje budoucí stav; repozitář neprovádí žádné AWS operace ani deployment.
+[Dokumentační rozcestník](docs/README.md) odděluje produktový kontext, aplikační architekturu, lokální provoz a návrh AWS nasazení. CI zůstává bez AWS credentials a deploymentu; cloudové skripty jsou výhradně explicitně spouštěný, potvrzovaný provozní nástroj.
+
+## Řízený lifecycle AWS dema
+
+CDK používá dva přesně pojmenované stacky: první vytvoří ECR repositories, wrapper následně nahraje immutable image označené Git SHA a teprve potom nasadí aplikační stack. Každá mutace ověřuje účet `eu-central-1`, zobrazí `cdk diff` a vyžaduje přesnou potvrzovací frázi. Cleanup odstraní oba DevBank stacky v opačném pořadí a audituje zbytkové resources; standardní `CDKToolkit` zůstává nedotčený.
+
+```powershell
+$env:DEVBANK_AWS_ACCOUNT_ID = "123456789012"
+npm run aws:status
+npm run aws:deploy
+npm run aws:destroy
+npm run aws:audit
+```
+
+Podrobnosti, destrukční politiky a známé kompromisy jsou v [plánu AWS deploymentu](docs/aws-deployment-plan.md). Skripty samy neprovádějí login ani bootstrap a v rámci lokální či CI kontroly se nespouštějí.

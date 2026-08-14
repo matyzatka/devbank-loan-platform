@@ -13,14 +13,15 @@ Existující kontejnery se nasazují bez změny aplikačních rolí:
 - API a worker používají společný PostgreSQL cluster a Kafka-compatible broker;
 - CloudWatch centralizuje strukturované logy, metriky a alarmy;
 - Secrets Manager poskytuje aplikační přihlašovací údaje za běhu.
+- Interface VPC endpoints zpřístupňují ECR, CloudWatch Logs a Secrets Manager bez NAT Gateway; S3 gateway endpoint zajišťuje stažení image layers.
 
 ```mermaid
 flowchart TB
-    U["Uživatel"] -->|"HTTPS 443"| ALB["Application Load Balancer"]
+    U["Uživatel"] -->|"HTTP 80 · pouze krátkodobé demo"| ALB["Application Load Balancer"]
     ALB --> FE["ECS/Fargate · Frontend"]
     FE -->|"privátní REST"| API["ECS/Fargate · Loan API"]
     API -->|"JDBC/TLS"| PG[("PostgreSQL")]
-    API -->|"TLS/SASL"| K[("Kafka")]
+    API -->|"privátní TCP"| K[("Kafka")]
     K --> W["ECS/Fargate · Processing Worker"]
     W -->|"JDBC/TLS"| PG
     FE -.-> CW["CloudWatch"]
@@ -29,6 +30,10 @@ flowchart TB
     ECR["ECR"] --> FE
     ECR --> API
     ECR --> W
+    VPCE["VPC endpoints"] --> FE
+    VPCE --> API
+    VPCE --> W
+    VPCE --> K
     SM["Secrets Manager"] --> API
     SM --> W
 ```
@@ -41,11 +46,13 @@ Krátkodobá varianta zachovává plný aplikační a event-driven tok při kont
 
 - jeden task pro každou aplikační službu;
 - RDS for PostgreSQL v šifrované Single-AZ konfiguraci s automatickými zálohami;
-- jeden Kafka broker v KRaft režimu na Fargate s EFS a privátním DNS;
+- jeden Kafka broker v KRaft režimu na Fargate s ephemeral storage a privátním DNS;
 - dvě Availability Zones pro ALB, aplikační subnety a plánování tasků;
 - krátká retence logů, malé horní limity škálování a povinné datum ukončení prostředí.
 
-Single-AZ databáze a jednouzlový broker neposkytují vysokou dostupnost. Varianta je určená výhradně pro fiktivní data a nemá produkční SLA.
+Single-AZ databáze a jednouzlový broker neposkytují vysokou dostupnost. Nahrazení Kafka tasku odstraní lokální broker data. Varianta je určená výhradně pro fiktivní data a nemá produkční SLA.
+
+ALB v této variantě používá HTTP, aby celý aplikační lifecycle zůstal uvnitř CDK bez ručně spravovaného DNS a certifikátu. Produkční varianta vyžaduje HTTPS s ACM certifikátem, spravovaný DNS záznam a odpovídající TLS policy.
 
 ## Varianta B — produkční prostředí
 

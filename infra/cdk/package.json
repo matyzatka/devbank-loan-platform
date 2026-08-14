@@ -1,0 +1,20 @@
+{
+  "name": "devbank-aws-infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "ts-node test/guardrails.ts",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.265.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "aws-cdk": "2.1136.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  }
+}

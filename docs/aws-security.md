@@ -7,25 +7,25 @@ Dokument stanovuje ochranné mechanismy [cílové AWS architektury](aws-architec
 - žádné dlouhodobé AWS access keys v GitHubu, ECS tasku, image ani repozitáři;
 - GitHub Actions používá krátkodobé přihlašovací údaje přes OIDC a `AssumeRoleWithWebIdentity`;
 - každá runtime role má pouze oprávnění potřebná pro svůj proces;
-- veřejně přístupný je pouze ALB na portu 443;
+- veřejně přístupný je pouze ALB; krátkodobá varianta používá port 80, produkční varianta výhradně HTTPS na portu 443;
 - produkční data jsou šifrovaná při přenosu i v klidu;
 - secrets se nepropagují do logů, build arguments ani image layers;
 - ukázkové prostředí používá výhradně fiktivní data.
 
 ## Síť a security groups
 
-VPC má veřejné subnety pro ALB a privátní subnety pro ECS a datové služby. Produkční varianta používá minimálně dvě AZ. NAT Gateway není bezpečnostní podmínka: pokud tasky nepotřebují obecný internet, preferují se VPC endpoints pro ECR API/DKR, S3, CloudWatch Logs, Secrets Manager a STS.
+VPC má veřejné subnety pouze pro ALB a dvě izolované aplikační subnety pro ECS, RDS a privátní endpoints. Tasky nemají veřejné IP adresy ani cestu přes NAT Gateway. ECR API/DKR, CloudWatch Logs a Secrets Manager jsou dostupné přes interface endpoints; vrstvy image přes S3 gateway endpoint.
 
 | Security group | Povolený ingress | Povolený egress |
 |---|---|---|
-| `alb-sg` | internet `443` | `frontend-sg:80` |
+| `alb-sg` | internet `80` v krátkodobé variantě; `443` v produkci | `frontend-sg:80` |
 | `frontend-sg` | `alb-sg:80` | `api-sg:8080`, DNS a nezbytné AWS endpoints |
-| `api-sg` | `frontend-sg:8080` | `db-sg:5432`, `kafka-sg:909x`, AWS endpoints |
-| `worker-sg` | žádný aplikační ingress | `db-sg:5432`, `kafka-sg:909x`, AWS endpoints |
-| `db-sg` | `api-sg:5432`, `worker-sg:5432` | pouze odpovědi / nezbytná správa |
-| `kafka-sg` | `api-sg` a `worker-sg` na TLS broker port | broker komunikace a nezbytná správa |
+| `application-sg` | `frontend-sg:8080` | `db-sg:5432`, `kafka-sg:19092`, DNS a privátní AWS endpoints |
+| `db-sg` | `application-sg:5432` | žádný iniciovaný provoz |
+| `kafka-sg` | `application-sg:19092` | DNS a privátní AWS endpoints |
+| `endpoint-sg` | frontend, application a Kafka SG na `443` | odpovědi na navázaná spojení |
 
-Security groups se odkazují navzájem, nepoužívají široké CIDR rozsahy pro datové porty. ECS tasky nemají public IP. HTTP se na ALB přesměruje na HTTPS a TLS policy zakáže zastaralé protokoly.
+Security groups se odkazují navzájem, nepoužívají široké CIDR rozsahy pro datové porty. ECS tasky nemají public IP. Krátkodobá varianta nemá certifikát mimo CDK, a proto veřejný vstup nešifruje; pracuje výhradně s fiktivními daty. Produkční varianta přesměruje HTTP na HTTPS a TLS policy zakáže zastaralé protokoly.
 
 ## IAM role
 
@@ -38,13 +38,9 @@ Společná execution role může pouze:
 - načíst pouze secrets uvedené v dané task definition;
 - použít konkrétní KMS klíč jen pro dešifrování těchto secrets.
 
-### API task role
+### Aplikační task role
 
-API nepotřebuje ECR ani CloudWatch API oprávnění, která zajišťuje execution role. Při SASL/SCRAM autentizaci MSK může být aplikační task role bez AWS oprávnění. Při MSK IAM autentizaci dostane pouze connect/write oprávnění pro konkrétní cluster a topic. Nemá oprávnění číst jiné secrets, spravovat ECS ani měnit infrastrukturu.
-
-### Worker task role
-
-Stejný princip jako API, ale Kafka oprávnění pouze connect/read/describe pro konkrétní topic a consumer group. Worker nepotřebuje write oprávnění, pokud nepublikuje navazující business event; jakmile jej publikuje, rozšíření musí být omezené na konkrétní topic.
+Runtime task role nemá žádná AWS API oprávnění. ECR pull, zápis do konkrétní log group a načtení databázového secretu zajišťují oddělené execution role. Jednouzlová Kafka komunikuje pouze uvnitř VPC a nepoužívá AWS IAM autentizaci; to je explicitní omezení ukázkové varianty.
 
 ### GitHub deployment role
 
@@ -60,7 +56,7 @@ Infrastructure provisioning má mít jinou roli a jiný schvalovaný workflow ne
 
 ## Secrets a konfigurace
 
-Secrets Manager obsahuje databázové heslo a případně Kafka SASL přihlašovací údaje. ECS je injektuje přímo do `SPRING_DATASOURCE_PASSWORD` a souvisejících proměnných. Necitlivé hodnoty, například topic, group ID, port a feature role, jsou v task definition nebo SSM Parameter Store.
+Secrets Manager obsahuje generované databázové heslo a uživatelské jméno. ECS je injektuje přímo do `SPRING_DATASOURCE_PASSWORD` a `SPRING_DATASOURCE_USERNAME`. Necitlivé hodnoty, například JDBC endpoint, topic, group ID, port a role procesu, jsou součástí task definition.
 
 - secrets se nepředávají jako Docker build args;
 - GitHub Actions jejich hodnotu nepotřebuje;
@@ -70,7 +66,7 @@ Secrets Manager obsahuje databázové heslo a případně Kafka SASL přihlašov
 
 ## Ochrana dat a logů
 
-- RDS, MSK, EFS, ECR a CloudWatch log groups používají encryption at rest;
+- RDS, ECR, Secrets Manager a CloudWatch Logs používají šifrování v klidu;
 - produkční TLS certifikát spravuje ACM;
 - logy obsahují `requestId`, `applicationId` a `eventId`, nikoli celé žádosti, přihlašovací údaje nebo citlivé payloady;
 - CloudWatch retention je explicitní, ne nekonečná;

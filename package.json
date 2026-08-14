@@ -1,0 +1,10 @@
+{
+  "name": "devbank-loan-platform",
+  "private": true,
+  "scripts": {
+    "aws:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/aws-demo-status.ps1",
+    "aws:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/aws-demo-deploy.ps1",
+    "aws:destroy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/aws-demo-destroy.ps1",
+    "aws:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/aws-demo-audit.ps1"
+  }
+}
