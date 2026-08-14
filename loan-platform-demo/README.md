@@ -13,7 +13,9 @@ This initial scaffold contains:
 - Docker and Compose placeholders;
 - reserved frontend, infrastructure, and documentation directories.
 
-The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. An outbox publisher delivers committed events to a local Apache Kafka broker and an idempotent consumer records them. The frontend and AWS infrastructure are deliberately not implemented yet.
+The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/list/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. An outbox publisher delivers committed events to a local Apache Kafka broker and an idempotent consumer records them.
+
+The React and TypeScript operations UI provides a searchable, filterable and paginated application queue, an idempotent creation form, and a workflow-aware detail screen. It uses TanStack Query for server state, React Hook Form with Zod for input validation, React Router for navigation, and an original banking-inspired visual system. Redux and a general-purpose component framework are intentionally omitted because the current scope does not justify them.
 
 The operational baseline now includes correlation IDs propagated from HTTP through the transactional outbox and Kafka headers, liveness/readiness probes, graceful shutdown, and Micrometer metrics for outbox backlog, oldest-event age, and publish outcomes. The `prod` Spring profile emits Logstash-compatible structured JSON logs and disables public API documentation.
 
@@ -62,6 +64,8 @@ Operational endpoints include `/actuator/health/liveness`, `/actuator/health/rea
 
 OpenAPI JSON is available at `http://localhost:8080/v3/api-docs` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
 
+For frontend development, run `npm install && npm run dev` in `frontend/` and open `http://localhost:5173`. Vite proxies API calls to the backend. For the containerized stack, run `docker compose up --build` and open `http://localhost:3000`; Nginx serves the SPA and proxies `/api` to the backend container.
+
 ## Event delivery semantics
 
 The publisher reads unpublished rows with `FOR UPDATE SKIP LOCKED`, publishes them to `loan-application-events`, and only then records `published_at`. Events for one application use the application ID as their Kafka key, preserving their order within a partition.
@@ -70,7 +74,7 @@ Delivery is **at least once**, not exactly once. A process crash after Kafka acc
 
 Consumer failures are retried twice after the original attempt. After three total attempts, the record is published to `loan-application-events.DLT`.
 
-To build and run the placeholder container after creating the backend JAR:
+To build and run the complete local stack after creating the backend JAR:
 
 ```bash
 cd backend

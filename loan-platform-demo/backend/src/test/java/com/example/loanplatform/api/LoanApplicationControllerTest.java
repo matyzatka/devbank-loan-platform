@@ -109,6 +109,22 @@ class LoanApplicationControllerTest {
     }
 
     @Test
+    void listsAndFiltersApplications() throws Exception {
+        create("api-list-001", validRequest());
+        create("api-list-002", """
+                {"customerId":"ACME-987","amount":750000.00,"currency":"USD"}
+                """);
+
+        var all = json(get("/api/v1/applications?size=10"));
+        var filtered = json(get("/api/v1/applications?query=ACME&status=SUBMITTED"));
+
+        assertThat(all.get("totalElements").asInt()).isEqualTo(2);
+        assertThat(all.get("items").size()).isEqualTo(2);
+        assertThat(filtered.get("totalElements").asInt()).isOne();
+        assertThat(filtered.at("/items/0/customerId").asText()).isEqualTo("ACME-987");
+    }
+
+    @Test
     void returnsValidationProblemForInvalidRequest() throws Exception {
         var response = create(
                 "api-invalid-001",

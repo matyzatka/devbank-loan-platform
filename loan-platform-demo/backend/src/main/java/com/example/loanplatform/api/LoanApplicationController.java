@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import com.example.loanplatform.domain.LoanApplicationStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -60,6 +62,16 @@ public class LoanApplicationController {
         return LoanApplicationResponse.from(service.get(id));
     }
 
+    @GetMapping
+    @Operation(summary = "List and filter loan applications")
+    public LoanApplicationPageResponse list(
+            @RequestParam(required = false) LoanApplicationStatus status,
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return LoanApplicationPageResponse.from(service.list(status, query, page, size));
+    }
+
     @PostMapping("/{id}/review")
     @Operation(summary = "Move a submitted application under review")
     public LoanApplicationResponse review(@PathVariable UUID id) {
@@ -86,4 +98,3 @@ public class LoanApplicationController {
         }
     }
 }
-

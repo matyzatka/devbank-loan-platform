@@ -17,6 +17,9 @@ import java.time.ZoneOffset;
 import java.util.Currency;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
+import org.jooq.Condition;
+import static org.jooq.impl.DSL.noCondition;
 
 import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
@@ -78,6 +81,39 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
                 .from(LOAN_APPLICATION)
                 .where(ID.eq(id))
                 .fetchOptional(this::toDomain);
+    }
+
+    @Override
+    public List<LoanApplication> findAll(
+            LoanApplicationStatus requestedStatus,
+            String query,
+            int offset,
+            int limit) {
+        return dsl.select(ID, CUSTOMER_ID, AMOUNT, CURRENCY, STATUS, VERSION, CREATED_AT, UPDATED_AT)
+                .from(LOAN_APPLICATION)
+                .where(filters(requestedStatus, query))
+                .orderBy(UPDATED_AT.desc(), ID.desc())
+                .offset(offset)
+                .limit(limit)
+                .fetch(this::toDomain);
+    }
+
+    @Override
+    public long count(LoanApplicationStatus requestedStatus, String query) {
+        return dsl.fetchCount(LOAN_APPLICATION, filters(requestedStatus, query));
+    }
+
+    private static Condition filters(LoanApplicationStatus requestedStatus, String query) {
+        Condition condition = noCondition();
+        if (requestedStatus != null) {
+            condition = condition.and(STATUS.eq(requestedStatus.name()));
+        }
+        if (query != null) {
+            var pattern = "%" + query.replace("%", "\\%").replace("_", "\\_") + "%";
+            condition = condition.and(CUSTOMER_ID.containsIgnoreCase(query)
+                    .or(ID.cast(String.class).likeIgnoreCase(pattern, '\\')));
+        }
+        return condition;
     }
 
     private LoanApplication toDomain(Record record) {

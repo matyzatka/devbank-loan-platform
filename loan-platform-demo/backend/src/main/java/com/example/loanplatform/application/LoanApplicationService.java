@@ -74,6 +74,22 @@ public class LoanApplicationService {
                 .orElseThrow(() -> new LoanApplicationNotFoundException(applicationId));
     }
 
+    @Transactional(readOnly = true)
+    public LoanApplicationPage list(LoanApplicationStatus status, String query, int page, int size) {
+        if (page < 0) {
+            throw new IllegalArgumentException("page must not be negative");
+        }
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException("size must be between 1 and 100");
+        }
+        var normalizedQuery = query == null || query.isBlank() ? null : query.trim();
+        return new LoanApplicationPage(
+                applications.findAll(status, normalizedQuery, page * size, size),
+                page,
+                size,
+                applications.count(status, normalizedQuery));
+    }
+
     @Transactional
     public LoanApplication startReview(UUID applicationId) {
         return changeStatus(applicationId, application -> application.startReview(clock));
@@ -135,4 +151,3 @@ public class LoanApplicationService {
         return value;
     }
 }
-
