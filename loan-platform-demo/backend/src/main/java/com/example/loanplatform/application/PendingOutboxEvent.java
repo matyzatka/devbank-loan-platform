@@ -9,6 +9,6 @@ public record PendingOutboxEvent(
         String eventType,
         String payload,
         Instant occurredAt,
+        String correlationId,
         int publishAttempts) {
 }
-

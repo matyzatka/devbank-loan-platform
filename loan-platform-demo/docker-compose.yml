@@ -52,3 +52,14 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/localhost/8080 &&
+          printf "GET /actuator/health/readiness HTTP/1.0\r\n\r\n" >&3 &&
+          read -r status <&3 && [[ "$$status" == *" 200 "* ]]'
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    stop_grace_period: 30s

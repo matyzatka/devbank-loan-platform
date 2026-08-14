@@ -12,6 +12,6 @@ public interface ProcessedEventRepository {
             UUID applicationId,
             String eventType,
             String payload,
+            String correlationId,
             Instant receivedAt);
 }
-

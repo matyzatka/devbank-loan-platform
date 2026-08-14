@@ -19,6 +19,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.MDC;
+import com.example.loanplatform.configuration.CorrelationIds;
 
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
@@ -72,7 +74,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle(status.getReasonPhrase());
         problem.setType(URI.create("https://loan-platform.example/problems/" + code.toLowerCase()));
         problem.setProperty("code", code);
+        var correlationId = MDC.get(CorrelationIds.MDC_KEY);
+        if (correlationId != null) {
+            problem.setProperty(CorrelationIds.MDC_KEY, correlationId);
+        }
         return problem;
     }
 }
-

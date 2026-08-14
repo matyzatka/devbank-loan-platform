@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.jooq.impl.DSL.table;
+import static org.jooq.impl.DSL.field;
 
 @Testcontainers
 @SpringBootTest(
@@ -75,6 +76,36 @@ class LoanApplicationControllerTest {
         assertThat(json(retrieved).get("customerId").asText()).isEqualTo("CORP-123");
         assertThat(dsl.fetchCount(table("loan_application"))).isOne();
         assertThat(dsl.fetchCount(table("outbox_event"))).isOne();
+    }
+
+    @Test
+    void propagatesCorrelationIdToResponseProblemAndOutbox() throws Exception {
+        var correlationId = "portfolio-demo-42";
+        var response = create("api-correlation-001", validRequest(), correlationId);
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.headers().firstValue("X-Correlation-ID")).contains(correlationId);
+        assertThat(dsl.select(field("correlation_id", String.class))
+                .from(table("outbox_event"))
+                .fetchSingle(field("correlation_id", String.class)))
+                .isEqualTo(correlationId);
+
+        var problem = HttpRequest.newBuilder(uri("/api/v1/applications/" + UUID.randomUUID()))
+                .header("X-Correlation-ID", correlationId)
+                .GET()
+                .build();
+        var problemResponse = http.send(problem, HttpResponse.BodyHandlers.ofString());
+        assertThat(json(problemResponse).get("correlationId").asText()).isEqualTo(correlationId);
+    }
+
+    @Test
+    void exposesOutboxBacklogMetric() throws Exception {
+        create("api-metric-001", validRequest());
+
+        var response = get("/actuator/metrics/loan.outbox.pending");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json(response).at("/measurements/0/value").asDouble()).isEqualTo(1);
     }
 
     @Test
@@ -156,12 +187,18 @@ class LoanApplicationControllerTest {
     }
 
     private HttpResponse<String> create(String idempotencyKey, String body) throws Exception {
+        return create(idempotencyKey, body, null);
+    }
+
+    private HttpResponse<String> create(String idempotencyKey, String body, String correlationId) throws Exception {
         var request = HttpRequest.newBuilder(uri("/api/v1/applications"))
                 .header("Content-Type", "application/json")
                 .header("Idempotency-Key", idempotencyKey)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (correlationId != null) {
+            request.header("X-Correlation-ID", correlationId);
+        }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> postAction(String path) throws Exception {

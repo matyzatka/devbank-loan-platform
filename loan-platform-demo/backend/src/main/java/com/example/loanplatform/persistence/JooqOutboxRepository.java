@@ -2,6 +2,7 @@ package com.example.loanplatform.persistence;
 
 import com.example.loanplatform.application.OutboxRepository;
 import com.example.loanplatform.application.PendingOutboxEvent;
+import com.example.loanplatform.configuration.CorrelationIds;
 import com.example.loanplatform.domain.event.LoanApplicationEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,32 +35,36 @@ public class JooqOutboxRepository implements OutboxRepository {
     private static final Field<OffsetDateTime> OCCURRED_AT = field(name("occurred_at"), OffsetDateTime.class);
     private static final Field<OffsetDateTime> PUBLISHED_AT = field(name("published_at"), OffsetDateTime.class);
     private static final Field<Integer> PUBLISH_ATTEMPTS = field(name("publish_attempts"), Integer.class);
+    private static final Field<String> CORRELATION_ID = field(name("correlation_id"), String.class);
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
+    private final CorrelationIds correlationIds;
 
-    public JooqOutboxRepository(DSLContext dsl, ObjectMapper objectMapper) {
+    public JooqOutboxRepository(DSLContext dsl, ObjectMapper objectMapper, CorrelationIds correlationIds) {
         this.dsl = dsl;
         this.objectMapper = objectMapper;
+        this.correlationIds = correlationIds;
     }
 
     @Override
     public void append(LoanApplicationEvent event) {
         dsl.insertInto(OUTBOX)
-                .columns(ID, AGGREGATE_ID, EVENT_TYPE, SCHEMA_VERSION, PAYLOAD, OCCURRED_AT)
+                .columns(ID, AGGREGATE_ID, EVENT_TYPE, SCHEMA_VERSION, PAYLOAD, OCCURRED_AT, CORRELATION_ID)
                 .values(
                         event.eventId(),
                         event.applicationId(),
                         event.eventType(),
                         event.schemaVersion(),
                         JSONB.valueOf(toJson(event)),
-                        event.occurredAt().atOffset(ZoneOffset.UTC))
+                        event.occurredAt().atOffset(ZoneOffset.UTC),
+                        correlationIds.currentOrGenerate())
                 .execute();
     }
 
     @Override
     public List<PendingOutboxEvent> lockUnpublished(int batchSize) {
-        return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, PUBLISH_ATTEMPTS)
+        return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, CORRELATION_ID, PUBLISH_ATTEMPTS)
                 .from(OUTBOX)
                 .where(PUBLISHED_AT.isNull())
                 .orderBy(OCCURRED_AT, ID)
@@ -72,6 +77,7 @@ public class JooqOutboxRepository implements OutboxRepository {
                         record.get(EVENT_TYPE),
                         record.get(PAYLOAD).data(),
                         record.get(OCCURRED_AT).toInstant(),
+                        record.get(CORRELATION_ID),
                         record.get(PUBLISH_ATTEMPTS)));
     }
 
@@ -89,6 +95,20 @@ public class JooqOutboxRepository implements OutboxRepository {
                 .set(PUBLISHED_AT, publishedAt.atOffset(ZoneOffset.UTC))
                 .where(ID.eq(eventId))
                 .execute();
+    }
+
+    @Override
+    public long countUnpublished() {
+        return dsl.fetchCount(OUTBOX, PUBLISHED_AT.isNull());
+    }
+
+    @Override
+    public Instant oldestUnpublishedAt() {
+        var value = dsl.select(org.jooq.impl.DSL.min(OCCURRED_AT))
+                .from(OUTBOX)
+                .where(PUBLISHED_AT.isNull())
+                .fetchOne(0, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private String toJson(LoanApplicationEvent event) {

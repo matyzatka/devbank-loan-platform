@@ -15,6 +15,8 @@ This initial scaffold contains:
 
 The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. An outbox publisher delivers committed events to a local Apache Kafka broker and an idempotent consumer records them. The frontend and AWS infrastructure are deliberately not implemented yet.
 
+The operational baseline now includes correlation IDs propagated from HTTP through the transactional outbox and Kafka headers, liveness/readiness probes, graceful shutdown, and Micrometer metrics for outbox backlog, oldest-event age, and publish outcomes. The `prod` Spring profile emits Logstash-compatible structured JSON logs and disables public API documentation.
+
 ## Proposed structure
 
 ```text
@@ -55,6 +57,8 @@ mvn spring-boot:run
 ```
 
 Then request `http://localhost:8080/actuator/health`.
+
+Operational endpoints include `/actuator/health/liveness`, `/actuator/health/readiness`, and `/actuator/metrics`. Run with `--spring.profiles.active=prod` to use structured JSON console logging. A missing or unsafe `X-Correlation-ID` is replaced with a generated UUID; the selected value is returned in the response and included in API problem details.
 
 OpenAPI JSON is available at `http://localhost:8080/v3/api-docs` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
 

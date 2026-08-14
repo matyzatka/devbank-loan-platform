@@ -47,4 +47,18 @@ class HealthEndpointTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("\"status\":\"UP\"");
     }
+
+    @Test
+    void exposesKubernetesCompatibleHealthProbes() throws Exception {
+        assertThat(get("/actuator/health/liveness").statusCode()).isEqualTo(200);
+        assertThat(get("/actuator/health/readiness").statusCode()).isEqualTo(200);
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:%d%s".formatted(port, path)))
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
 }

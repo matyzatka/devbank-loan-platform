@@ -6,6 +6,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.MDC;
+import com.example.loanplatform.configuration.CorrelationIds;
+import java.nio.charset.StandardCharsets;
 
 import java.time.Clock;
 import java.util.UUID;
@@ -32,19 +36,27 @@ public class LoanApplicationEventConsumer {
 
     @KafkaListener(topics = "${loan-platform.events.topic}")
     @Transactional
-    public void consume(String payload) {
-        var event = parse(payload);
-        var eventId = requiredUuid(event, "eventId");
-        if (!processedEvents.claim(eventId, clock.instant())) {
-            return;
-        }
+    public void consume(ConsumerRecord<String, String> record) {
+        var header = record.headers().lastHeader(CorrelationIds.HEADER);
+        var correlationId = header == null
+                ? UUID.randomUUID().toString()
+                : new String(header.value(), StandardCharsets.UTF_8);
+        try (var ignored = MDC.putCloseable(CorrelationIds.MDC_KEY, correlationId)) {
+            var payload = record.value();
+            var event = parse(payload);
+            var eventId = requiredUuid(event, "eventId");
+            if (!processedEvents.claim(eventId, clock.instant())) {
+                return;
+            }
 
-        processedEvents.appendAuditEntry(
-                eventId,
-                requiredUuid(event, "applicationId"),
-                requiredText(event, "eventType"),
-                payload,
-                clock.instant());
+            processedEvents.appendAuditEntry(
+                    eventId,
+                    requiredUuid(event, "applicationId"),
+                    requiredText(event, "eventType"),
+                    payload,
+                    correlationId,
+                    clock.instant());
+        }
     }
 
     private com.fasterxml.jackson.databind.JsonNode parse(String payload) {

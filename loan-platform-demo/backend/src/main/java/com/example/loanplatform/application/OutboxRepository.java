@@ -15,4 +15,8 @@ public interface OutboxRepository {
     void recordPublishAttempt(UUID eventId);
 
     void markPublished(UUID eventId, Instant publishedAt);
+
+    long countUnpublished();
+
+    Instant oldestUnpublishedAt();
 }

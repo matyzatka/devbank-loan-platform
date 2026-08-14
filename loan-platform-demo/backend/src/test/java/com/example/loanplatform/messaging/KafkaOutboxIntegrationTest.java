@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.kafka.core.KafkaTemplate;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -64,6 +65,9 @@ class KafkaOutboxIntegrationTest {
     @Autowired
     private DSLContext dsl;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @BeforeEach
     void clearDatabase() {
         dsl.deleteFrom(table("loan_application_event_log")).execute();
@@ -82,6 +86,9 @@ class KafkaOutboxIntegrationTest {
 
         await(() -> rowCount("loan_application_event_log") == 1);
         assertThat(unpublishedCount()).isZero();
+        assertThat(meterRegistry.find("loan.outbox.publish")
+                .tag("result", "success")
+                .counter().count()).isGreaterThanOrEqualTo(1);
         assertThat(dsl.fetchOne(
                         "select publish_attempts, published_at is not null as published "
                                 + "from outbox_event where aggregate_id = ?",
@@ -90,6 +97,11 @@ class KafkaOutboxIntegrationTest {
                     assertThat(record.get("publish_attempts", Integer.class)).isOne();
                     assertThat(record.get("published", Boolean.class)).isTrue();
                 });
+        assertThat(dsl.fetchOne(
+                        "select correlation_id from loan_application_event_log where application_id = ?",
+                        application.getId())
+                .get("correlation_id", String.class))
+                .isNotBlank();
 
         var payload = outboxPayload(application.getId());
         kafkaTemplate.send(TOPIC, application.getId().toString(), payload).get();
