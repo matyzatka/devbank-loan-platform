@@ -13,9 +13,9 @@ Write-Host "`n$script:DevBankToolkitStack is support infrastructure and will rem
 Confirm-ExactPhrase 'DESTROY DEVBANK DEMO'
 
 if ((Get-StackStatus $script:DevBankApplicationStack) -ne 'NOT_FOUND') {
-    Invoke-Cdk destroy $script:DevBankApplicationStack --exclusively --force
+    Invoke-Cdk destroy $script:DevBankApplicationStackId --exclusively --force
 }
 if ((Get-StackStatus $script:DevBankImagesStack) -ne 'NOT_FOUND') {
-    Invoke-Cdk destroy $script:DevBankImagesStack --exclusively --force
+    Invoke-Cdk destroy $script:DevBankImagesStackId --exclusively --force
 }
 & (Join-Path $PSScriptRoot 'aws-demo-audit.ps1') -ExpectedAccountId $context.Account

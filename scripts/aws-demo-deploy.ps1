@@ -21,11 +21,11 @@ try {
     Invoke-CheckedNative npm run synth -- --quiet
 } finally { Pop-Location }
 
-Invoke-Cdk diff $script:DevBankImagesStack --exclusively --no-change-set
-Invoke-Cdk diff $script:DevBankApplicationStack --exclusively --no-change-set --parameters "$($script:DevBankApplicationStack):ApplicationImageTag=$sha" --parameters "$($script:DevBankApplicationStack):KafkaImageTag=3.8.0"
+Invoke-Cdk diff $script:DevBankImagesStackId --exclusively --no-change-set
+Invoke-Cdk diff $script:DevBankApplicationStackId --exclusively --no-change-set
 Confirm-ExactPhrase 'DEPLOY DEVBANK DEMO'
 
-Invoke-Cdk deploy $script:DevBankImagesStack --exclusively --require-approval never
+Invoke-Cdk deploy $script:DevBankImagesStackId --exclusively --require-approval never
 
 $registry = "$($context.Account).dkr.ecr.$($script:DevBankRegion).amazonaws.com"
 $password = & aws ecr get-login-password --region $script:DevBankRegion
@@ -53,5 +53,5 @@ if (-not (Test-EcrTag 'devbank/kafka' '3.8.0')) {
     Invoke-CheckedNative docker push "$registry/devbank/kafka:3.8.0"
 }
 
-Invoke-Cdk deploy $script:DevBankApplicationStack --exclusively --require-approval never --parameters "$($script:DevBankApplicationStack):ApplicationImageTag=$sha" --parameters "$($script:DevBankApplicationStack):KafkaImageTag=3.8.0"
+Invoke-Cdk deploy $script:DevBankApplicationStackId --exclusively --require-approval never --parameters "$($script:DevBankApplicationStackId):ApplicationImageTag=$sha" --parameters "$($script:DevBankApplicationStackId):KafkaImageTag=3.8.0"
 & (Join-Path $PSScriptRoot 'aws-demo-status.ps1') -ExpectedAccountId $context.Account
