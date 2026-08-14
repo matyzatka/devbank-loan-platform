@@ -8,6 +8,6 @@ import org.springframework.context.annotation.Configuration;
 @OpenAPIDefinition(info = @Info(
         title = "Loan Platform API",
         version = "v1",
-        description = "Corporate loan application processing demonstrator"))
+        description = "Demonstration platform for processing corporate loan applications"))
 public class OpenApiConfiguration {
 }

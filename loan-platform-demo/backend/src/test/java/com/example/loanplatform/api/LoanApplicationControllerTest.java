@@ -7,6 +7,7 @@ import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.example.loanplatform.application.LoanApplicationService;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -49,8 +50,13 @@ class LoanApplicationControllerTest {
     @Autowired
     private DSLContext dsl;
 
+    @Autowired
+    private LoanApplicationService service;
+
     @BeforeEach
     void clearDatabase() {
+        dsl.deleteFrom(table("loan_application_status_history")).execute();
+        dsl.deleteFrom(table("loan_preprocessing_result")).execute();
         dsl.deleteFrom(table("outbox_event")).execute();
         dsl.deleteFrom(table("idempotency_record")).execute();
         dsl.deleteFrom(table("loan_application")).execute();
@@ -85,9 +91,9 @@ class LoanApplicationControllerTest {
 
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(response.headers().firstValue("X-Correlation-ID")).contains(correlationId);
-        assertThat(dsl.select(field("correlation_id", String.class))
+        assertThat(dsl.select(field("request_id", String.class))
                 .from(table("outbox_event"))
-                .fetchSingle(field("correlation_id", String.class)))
+                .fetchSingle(field("request_id", String.class)))
                 .isEqualTo(correlationId);
 
         var problem = HttpRequest.newBuilder(uri("/api/v1/applications/" + UUID.randomUUID()))
@@ -95,7 +101,7 @@ class LoanApplicationControllerTest {
                 .GET()
                 .build();
         var problemResponse = http.send(problem, HttpResponse.BodyHandlers.ofString());
-        assertThat(json(problemResponse).get("correlationId").asText()).isEqualTo(correlationId);
+        assertThat(json(problemResponse).get("requestId").asText()).isEqualTo(correlationId);
     }
 
     @Test
@@ -171,17 +177,19 @@ class LoanApplicationControllerTest {
         var created = json(create("api-workflow-001", validRequest()));
         var id = created.get("id").asText();
 
-        var reviewed = postAction("/api/v1/applications/" + id + "/review");
+        service.startReviewFromWorker(
+                UUID.fromString(id),
+                "worker-test-request",
+                UUID.randomUUID());
         var approved = postAction("/api/v1/applications/" + id + "/approve");
         var invalid = postAction("/api/v1/applications/" + id + "/reject");
 
-        assertThat(reviewed.statusCode()).isEqualTo(200);
-        assertThat(json(reviewed).get("status").asText()).isEqualTo("UNDER_REVIEW");
         assertThat(approved.statusCode()).isEqualTo(200);
         assertThat(json(approved).get("status").asText()).isEqualTo("APPROVED");
         assertThat(invalid.statusCode()).isEqualTo(409);
         assertProblem(invalid, "BUSINESS_CONFLICT");
         assertThat(dsl.fetchCount(table("outbox_event"))).isEqualTo(3);
+        assertThat(dsl.fetchCount(table("loan_application_status_history"))).isEqualTo(3);
     }
 
     @Test

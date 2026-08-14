@@ -30,7 +30,7 @@ public class JooqProcessedEventRepository implements ProcessedEventRepository {
     private static final Field<String> EVENT_TYPE = field(name("event_type"), String.class);
     private static final Field<JSONB> PAYLOAD = field(name("payload"), JSONB.class);
     private static final Field<OffsetDateTime> RECEIVED_AT = field(name("received_at"), OffsetDateTime.class);
-    private static final Field<String> CORRELATION_ID = field(name("correlation_id"), String.class);
+    private static final Field<String> REQUEST_ID = field(name("request_id"), String.class);
 
     private final DSLContext dsl;
 
@@ -57,7 +57,7 @@ public class JooqProcessedEventRepository implements ProcessedEventRepository {
             String correlationId,
             Instant receivedAt) {
         dsl.insertInto(EVENT_LOG)
-                .columns(LOG_EVENT_ID, APPLICATION_ID, EVENT_TYPE, PAYLOAD, CORRELATION_ID, RECEIVED_AT)
+                .columns(LOG_EVENT_ID, APPLICATION_ID, EVENT_TYPE, PAYLOAD, REQUEST_ID, RECEIVED_AT)
                 .values(
                         eventId,
                         applicationId,

@@ -9,4 +9,3 @@ public final class OptimisticLockingConflictException extends RuntimeException {
                 .formatted(applicationId, expectedVersion));
     }
 }
-

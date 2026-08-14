@@ -8,4 +8,3 @@ public final class LoanApplicationNotFoundException extends RuntimeException {
         super("Loan application %s was not found".formatted(applicationId));
     }
 }
-

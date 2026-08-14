@@ -22,4 +22,3 @@ public final class InvalidLoanApplicationTransitionException extends RuntimeExce
         return targetStatus;
     }
 }
-

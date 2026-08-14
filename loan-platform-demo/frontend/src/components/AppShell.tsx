@@ -8,7 +8,7 @@ export function AppShell() {
       <header className="topbar">
         <button className="brand" onClick={() => void navigate('/applications')} aria-label="LoanFlow domů">
           <span className="brand-mark"><Landmark size={23} strokeWidth={2.4} /></span>
-          <span><strong>LoanFlow</strong><small>Corporate lending</small></span>
+          <span><strong>LoanFlow</strong><small>Firemní úvěry</small></span>
         </button>
         <div className="topbar-context"><span className="environment-dot" /> Interní pracovní prostředí</div>
         <div className="topbar-actions">
@@ -26,7 +26,7 @@ export function AppShell() {
         <span className="system-state"><span /> Systémy dostupné</span>
       </nav>
       <main className="workspace"><Outlet /></main>
-      <footer><span>LoanFlow • Portfolio demonstrátor</span><span>API v1 · At-least-once delivery</span></footer>
+      <footer><span>LoanFlow • Portfolio demonstrátor</span><span>API v1 · Doručení alespoň jednou</span></footer>
     </div>
   )
 }

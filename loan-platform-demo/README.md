@@ -1,96 +1,120 @@
 # Loan Platform Demo
 
-A small, realistic corporate loan application processing demonstrator for a Java/React developer portfolio. It is intentionally a modular monolith so business rules, delivery reliability, and operational concerns remain understandable and testable.
+A small but realistic Java/React portfolio project for a banking environment. It demonstrates transaction consistency, HTTP idempotency, a transactional outbox, at-least-once event delivery, idempotent processing, optimistic locking, and auditable state transitions.
 
-## Current milestone
+This is a demonstrator, not a production banking system or a real credit-scoring engine. The worker performs only a **preliminary validation and process check**.
 
-This initial scaffold contains:
+## Architecture
 
-- a Java 21 and Spring Boot 3.5 backend;
-- packages for API, application, domain, persistence, messaging, and configuration concerns;
-- Spring Boot Actuator health at `GET /actuator/health`;
-- one integration test for the health endpoint;
-- Docker and Compose placeholders;
-- reserved frontend, infrastructure, and documentation directories.
-
-The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer provides transactional create/get/list/workflow use cases, request idempotency, and a transactional outbox. A versioned REST API exposes these use cases with validation, RFC 9457 problem responses, and generated OpenAPI documentation. An outbox publisher delivers committed events to a local Apache Kafka broker and an idempotent consumer records them.
-
-The React and TypeScript operations UI provides a searchable, filterable and paginated application queue, an idempotent creation form, and a workflow-aware detail screen. It uses TanStack Query for server state, React Hook Form with Zod for input validation, React Router for navigation, and an original banking-inspired visual system. Redux and a general-purpose component framework are intentionally omitted because the current scope does not justify them.
-
-The operational baseline now includes correlation IDs propagated from HTTP through the transactional outbox and Kafka headers, liveness/readiness probes, graceful shutdown, and Micrometer metrics for outbox backlog, oldest-event age, and publish outcomes. The `prod` Spring profile emits Logstash-compatible structured JSON logs and disables public API documentation.
-
-Logging is intentionally signal-oriented: application lifecycle and loan workflow outcomes remain at `INFO`; Kafka client internals, Spring Kafka coordination, and jOOQ internals emit only `WARN` or above. Publication failures and dead-letter processing remain visible, while broker configuration dumps, rebalances, and Nginx access noise are suppressed. Detailed Kafka troubleshooting can be enabled temporarily with `LOGGING_LEVEL_ORG_APACHE_KAFKA=INFO`.
-
-## Proposed structure
+One Java artifact runs in two independently configured processes:
 
 ```text
-loan-platform-demo/
-|-- backend/
-|   |-- src/main/java/com/example/loanplatform/
-|   |   |-- api/
-|   |   |-- application/
-|   |   |-- configuration/
-|   |   |-- domain/
-|   |   |-- messaging/
-|   |   `-- persistence/
-|   `-- pom.xml
-|-- frontend/
-|-- infra/
-|-- docs/
-|-- docker-compose.yml
-`-- README.md
+Browser -> React / Nginx -> Loan API
+                              |
+                              +-> PostgreSQL: application + idempotency + audit + outbox
+                              +-> outbox publisher -> Kafka: LoanApplicationSubmitted
+
+Kafka -> Loan Processing Worker
+           +-> event deduplication
+           +-> preliminary validation and process check
+           +-> result + audit + UNDER_REVIEW
+           +-> LoanApplicationStatusChanged in the outbox
 ```
 
-## Dependency choices
+- `loan-api`: owns the REST API and primary application state, and publishes outbox events. It does not consume its own events.
+- `processing-worker`: has no HTTP server and consumes only `LoanApplicationSubmitted` events.
+- `frontend`: React SPA served by Nginx.
+- `postgres`: shared local database.
+- `kafka`: local single-node broker.
 
-The backend currently uses Spring Web, Actuator, Spring Boot Test, and Lombok. Lombok is deliberately restricted: `@Getter` removes mechanical aggregate accessors, while `@Data`, experimental features, and `@SneakyThrows` are forbidden in `lombok.config`. Later milestones are expected to add dependencies only when their capability is implemented:
+The runtime workflow is:
 
-- springdoc-openapi for API documentation;
-- Testcontainers PostgreSQL and Kafka modules for integration testing.
+```text
+SUBMITTED -> preliminary validation and process check -> UNDER_REVIEW
+UNDER_REVIEW -> APPROVED | REJECTED
+```
 
-This keeps the first milestone small and avoids implying that unimplemented capabilities already exist.
+The transition to `UNDER_REVIEW` is owned by the worker and is not exposed as a public REST command. The API permits a human operator to make the final decision only after preliminary processing completes.
 
-## Local verification
+See [Architecture and event flow](docs/ARCHITECTURE.md) for transaction boundaries and failure behaviour.
 
-Prerequisites: Java 21 and Maven 3.9 or newer.
+## Run locally
 
-```bash
+Prerequisite: Docker Desktop.
+
+```powershell
+cd "C:\Users\matou\Documents\ChatGPT\New project\loan-platform-demo"
+docker compose up -d --build --remove-orphans
+docker compose ps
+```
+
+- Czech operations UI: `http://localhost:3000`
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Loan API readiness: `http://localhost:8080/actuator/health/readiness`
+
+Follow signal-oriented application logs:
+
+```powershell
+docker compose logs -f loan-api processing-worker
+```
+
+Stop the stack with `docker compose down`.
+
+## Local development
+
+Java 21 and Maven 3.9+ are required for a local backend build:
+
+```powershell
 cd backend
 mvn clean verify
-mvn spring-boot:run
 ```
 
-Then request `http://localhost:8080/actuator/health`.
+Node.js 22 is required for standalone frontend development:
 
-Operational endpoints include `/actuator/health/liveness`, `/actuator/health/readiness`, and `/actuator/metrics`. Run with `--spring.profiles.active=prod` to use structured JSON console logging. A missing or unsafe `X-Correlation-ID` is replaced with a generated UUID; the selected value is returned in the response and included in API problem details.
-
-OpenAPI JSON is available at `http://localhost:8080/v3/api-docs` and Swagger UI at `http://localhost:8080/swagger-ui.html`.
-
-For frontend development, run `npm install && npm run dev` in `frontend/` and open `http://localhost:5173`. Vite proxies API calls to the backend. For the containerized stack, run `docker compose up --build` and open `http://localhost:3000`; Nginx serves the SPA and proxies `/api` to the backend container.
-
-## Event delivery semantics
-
-The publisher reads unpublished rows with `FOR UPDATE SKIP LOCKED`, publishes them to `loan-application-events`, and only then records `published_at`. Events for one application use the application ID as their Kafka key, preserving their order within a partition.
-
-Delivery is **at least once**, not exactly once. A process crash after Kafka accepts a record but before PostgreSQL commits `published_at` can cause the event to be sent again. The consumer claims the event ID in `processed_event` in the same transaction as its audit side effect, so duplicate deliveries do not repeat that side effect.
-
-Consumer failures are retried twice after the original attempt. After three total attempts, the record is published to `loan-application-events.DLT`.
-
-To build and run the complete local stack after creating the backend JAR:
-
-```bash
-cd backend
-mvn clean package
-cd ..
-docker compose up --build
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev
 ```
 
-## Delivery boundaries
+The Vite development server proxies `/api` and `/actuator` to the Loan API on port `8080`.
 
-- **Implemented and locally verified:** recorded here only after the corresponding build or test succeeds.
-- **Tested in AWS:** nothing yet.
-- **AWS infrastructure design:** reserved for a later CDK milestone; nothing has been deployed and no credentials are used.
+## Consistency and delivery semantics
 
-## Planned architecture
+Application creation stores `loan_application`, `idempotency_record`, the initial `loan_application_status_history`, and a `LoanApplicationSubmitted` outbox event in one PostgreSQL transaction.
 
-The intended flow is REST API to application service to one PostgreSQL transaction that stores both domain state and an outbox record. A publisher will deliver outbox events to Kafka, and consumers will process those events idempotently under at-least-once delivery. This is a future design, not a claim about the current scaffold.
+The publisher marks an event as published only after Kafka acknowledges it. If publication fails, the application remains committed and the event remains pending for a later retry. Delivery is **at least once**, not exactly once. The worker claims each `event_id` in `processed_event` in the same transaction as its processing result, state transition, audit entry, and follow-up outbox event, so duplicate deliveries do not repeat business side effects.
+
+Optimistic locking protects the aggregate through its `version` column. The domain model rejects invalid state transitions.
+
+## Audit and traceability
+
+`loan_application_status_history` records the previous and new state, application version, timestamp, change source (`API` or `WORKER`), `requestId`, and related `eventId`.
+
+Logs carry `requestId`, `applicationId`, and `eventId` in MDC. The HTTP header remains `X-Correlation-ID` for compatibility; internally its value is treated as `requestId` and propagated in Kafka headers.
+
+## Verified scenarios
+
+- duplicate HTTP requests with the same `Idempotency-Key`;
+- conflicting payloads under the same idempotency key;
+- duplicate Kafka delivery without repeated side effects;
+- invalid state transitions;
+- optimistic-locking conflicts;
+- rollback of invalid creation;
+- publisher failure before acknowledgement, pending-event retention, and successful retry;
+- consumer retry and dead-letter routing;
+- HTTP-to-outbox-to-Kafka-to-worker correlation.
+
+## Demo limitations
+
+- The preliminary check verifies only consistency between the event and persisted application; it is not scoring.
+- API and worker share one database.
+- Kafka runs as one local node and application code creates topics.
+- Retry/DLT handling has no operator reprocessing UI.
+- Authentication and authorization are not implemented.
+- The UI displays a static demonstration user.
+- Metrics are not connected to a production monitoring system.
+
+## Proposed only
+
+AWS/ECS/Fargate deployment, CloudWatch dashboards and alarms, production secrets/IAM, separate database ownership, and real banking validation or scoring rules are proposals only. No AWS resource is created without separate approval.

@@ -32,6 +32,10 @@ spring:
       ack-mode: record
 
 loan-platform:
+  api:
+    enabled: true
+  worker:
+    enabled: false
   kafka:
     enabled: true
   events:
@@ -60,6 +64,8 @@ server:
   shutdown: graceful
 
 logging:
+  pattern:
+    correlation: "[requestId=%X{requestId:-}, applicationId=%X{applicationId:-}, eventId=%X{eventId:-}] "
   level:
     org.apache.kafka: WARN
     org.springframework.kafka: WARN

@@ -59,6 +59,8 @@ class JooqLoanApplicationRepositoryTest {
 
     @BeforeEach
     void clearDatabase() {
+        dsl.deleteFrom(table("loan_application_status_history")).execute();
+        dsl.deleteFrom(table("loan_preprocessing_result")).execute();
         dsl.deleteFrom(table("outbox_event")).execute();
         dsl.deleteFrom(table("idempotency_record")).execute();
         dsl.deleteFrom(table("loan_application")).execute();
@@ -174,13 +176,15 @@ class JooqLoanApplicationRepositoryTest {
     void movesApplicationThroughWorkflowAndCreatesOutboxEvents() {
         var created = service.create(command("workflow-001", "2500000.00"));
 
-        var reviewed = service.startReview(created.getId());
+        var reviewed = service.startReviewFromWorker(
+                created.getId(), "worker-test-request", UUID.randomUUID());
         var approved = service.approve(created.getId());
 
         assertThat(reviewed.getStatus()).isEqualTo(LoanApplicationStatus.UNDER_REVIEW);
         assertThat(approved.getStatus()).isEqualTo(LoanApplicationStatus.APPROVED);
         assertThat(approved.getVersion()).isEqualTo(2);
         assertThat(rowCount("outbox_event")).isEqualTo(3);
+        assertThat(rowCount("loan_application_status_history")).isEqualTo(3);
     }
 
     @Test

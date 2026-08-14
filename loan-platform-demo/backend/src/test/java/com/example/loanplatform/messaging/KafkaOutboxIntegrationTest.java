@@ -39,6 +39,7 @@ import static org.jooq.impl.DSL.table;
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
                 "loan-platform.outbox.fixed-delay=3600000",
+                "loan-platform.worker.enabled=true",
                 "spring.kafka.consumer.group-id=loan-platform-kafka-integration-test"
         })
 class KafkaOutboxIntegrationTest {
@@ -71,6 +72,8 @@ class KafkaOutboxIntegrationTest {
     @BeforeEach
     void clearDatabase() {
         dsl.deleteFrom(table("loan_application_event_log")).execute();
+        dsl.deleteFrom(table("loan_application_status_history")).execute();
+        dsl.deleteFrom(table("loan_preprocessing_result")).execute();
         dsl.deleteFrom(table("processed_event")).execute();
         dsl.deleteFrom(table("outbox_event")).execute();
         dsl.deleteFrom(table("idempotency_record")).execute();
@@ -84,23 +87,26 @@ class KafkaOutboxIntegrationTest {
 
         publisher.publishBatch();
 
-        await(() -> rowCount("loan_application_event_log") == 1);
-        assertThat(unpublishedCount()).isZero();
+        await(() -> rowCount("loan_preprocessing_result") == 1);
+        assertThat(service.get(application.getId()).getStatus().name()).isEqualTo("UNDER_REVIEW");
+        assertThat(rowCount("loan_application_event_log")).isOne();
+        assertThat(rowCount("loan_application_status_history")).isEqualTo(2);
+        assertThat(unpublishedCount()).isOne();
         assertThat(meterRegistry.find("loan.outbox.publish")
                 .tag("result", "success")
                 .counter().count()).isGreaterThanOrEqualTo(1);
         assertThat(dsl.fetchOne(
                         "select publish_attempts, published_at is not null as published "
-                                + "from outbox_event where aggregate_id = ?",
+                                + "from outbox_event where aggregate_id = ? and event_type = 'LoanApplicationSubmitted'",
                         application.getId()))
                 .satisfies(record -> {
                     assertThat(record.get("publish_attempts", Integer.class)).isOne();
                     assertThat(record.get("published", Boolean.class)).isTrue();
                 });
         assertThat(dsl.fetchOne(
-                        "select correlation_id from loan_application_event_log where application_id = ?",
+                        "select request_id from loan_application_event_log where application_id = ?",
                         application.getId())
-                .get("correlation_id", String.class))
+                .get("request_id", String.class))
                 .isNotBlank();
 
         var payload = outboxPayload(application.getId());
@@ -108,7 +114,10 @@ class KafkaOutboxIntegrationTest {
         kafkaTemplate.send(TOPIC, application.getId().toString(), payload).get();
 
         await(() -> rowCount("processed_event") == 1);
+        assertThat(rowCount("loan_preprocessing_result")).isOne();
         assertThat(rowCount("loan_application_event_log")).isOne();
+        assertThat(rowCount("loan_application_status_history")).isEqualTo(2);
+        assertThat(service.get(application.getId()).getVersion()).isOne();
     }
 
     @Test
@@ -150,6 +159,7 @@ class KafkaOutboxIntegrationTest {
         return dsl.select(payloadField)
                 .from(table("outbox_event"))
                 .where(field("aggregate_id", UUID.class).eq(applicationId))
+                .and(field("event_type", String.class).eq("LoanApplicationSubmitted"))
                 .fetchOne(payloadField)
                 .data();
     }

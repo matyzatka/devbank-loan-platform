@@ -13,9 +13,14 @@ export function ApplicationDetailPage() {
   const location = useLocation()
   const wasJustCreated = (location.state as { created?: boolean } | null)?.created === true
   const queryClient = useQueryClient()
-  const result = useQuery({ queryKey: applicationKeys.detail(applicationId), queryFn: () => getApplication(applicationId), enabled: !!applicationId })
+  const result = useQuery({
+    queryKey: applicationKeys.detail(applicationId),
+    queryFn: () => getApplication(applicationId),
+    enabled: !!applicationId,
+    refetchInterval: query => query.state.data?.status === 'SUBMITTED' ? 1_500 : false,
+  })
   const transition = useMutation({
-    mutationFn: (action: 'review' | 'approve' | 'reject') => transitionApplication(applicationId, action),
+    mutationFn: (action: 'approve' | 'reject') => transitionApplication(applicationId, action),
     onSuccess: updated => { queryClient.setQueryData(applicationKeys.detail(applicationId), updated); void queryClient.invalidateQueries({ queryKey: applicationKeys.all }) },
   })
 
@@ -40,8 +45,8 @@ export function ApplicationDetailPage() {
 
 function Data({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <div className="data-item"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div> }
 
-function Actions({ application, pending, onAction }: { application: LoanApplication; pending: boolean; onAction: (action: 'review' | 'approve' | 'reject') => void }) {
-  if (application.status === 'SUBMITTED') return <button className="button primary wide" disabled={pending} onClick={() => onAction('review')}>Předat k posouzení</button>
+function Actions({ application, pending, onAction }: { application: LoanApplication; pending: boolean; onAction: (action: 'approve' | 'reject') => void }) {
+  if (application.status === 'SUBMITTED') return <div className="closed-state waiting-state"><Clock3 /><span><strong>Probíhá předběžná kontrola</strong><small>Worker ověřuje procesní konzistenci žádosti.</small></span></div>
   if (application.status === 'UNDER_REVIEW') return <div className="decision-actions"><button className="button primary wide" disabled={pending} onClick={() => onAction('approve')}><CheckCircle2 size={18} /> Schválit žádost</button><button className="button danger wide" disabled={pending} onClick={() => onAction('reject')}><XCircle size={18} /> Zamítnout žádost</button></div>
   return <div className="closed-state"><CheckCircle2 /><span><strong>Rozhodnutí je konečné</strong><small>Stav již nelze změnit.</small></span></div>
 }
@@ -51,4 +56,4 @@ function Workflow({ application }: { application: LoanApplication }) {
   return <div className="workflow"><div className="workflow-step done"><i><CheckCircle2 /></i><div><strong>Žádost podána</strong><small>{formatDate(application.createdAt, true)}</small></div></div><div className={`workflow-step ${reviewed ? 'done' : 'current'}`}><i>{reviewed ? <CheckCircle2 /> : '2'}</i><div><strong>Úvěrové posouzení</strong><small>{reviewed ? 'Převzato ke zpracování' : 'Čeká na převzetí'}</small></div></div><div className={`workflow-step ${decided ? (rejected ? 'rejected' : 'done') : reviewed ? 'current' : ''}`}><i>{decided ? (rejected ? <XCircle /> : <CheckCircle2 />) : '3'}</i><div><strong>{decided ? statusLabels[application.status] : 'Rozhodnutí'}</strong><small>{decided ? formatDate(application.updatedAt, true) : 'Čeká na posouzení'}</small></div></div></div>
 }
 
-function actionCopy(status: LoanApplication['status']) { return status === 'SUBMITTED' ? 'Žádost je připravena k převzetí úvěrovým specialistou.' : status === 'UNDER_REVIEW' ? 'Posouzení probíhá. Zaznamenejte konečné rozhodnutí.' : 'Žádost byla uzavřena konečným rozhodnutím.' }
+function actionCopy(status: LoanApplication['status']) { return status === 'SUBMITTED' ? 'Žádost čeká na automatickou předběžnou validační a procesní kontrolu.' : status === 'UNDER_REVIEW' ? 'Předběžná kontrola proběhla. Zaznamenejte konečné rozhodnutí.' : 'Žádost byla uzavřena konečným rozhodnutím.' }

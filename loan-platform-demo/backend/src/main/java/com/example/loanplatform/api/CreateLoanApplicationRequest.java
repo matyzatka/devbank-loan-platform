@@ -23,4 +23,3 @@ public record CreateLoanApplicationRequest(
         @Pattern(regexp = "[A-Z]{3}", message = "must be a three-letter uppercase currency code")
         String currency) {
 }
-

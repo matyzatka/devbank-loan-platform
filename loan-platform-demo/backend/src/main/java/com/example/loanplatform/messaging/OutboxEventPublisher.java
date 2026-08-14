@@ -3,15 +3,13 @@ package com.example.loanplatform.messaging;
 import com.example.loanplatform.application.OutboxRepository;
 import lombok.extern.slf4j.Slf4j;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import com.example.loanplatform.configuration.CorrelationIds;
-import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.MDC;
 
 import java.time.Clock;
 
@@ -24,7 +22,7 @@ import java.time.Clock;
 public class OutboxEventPublisher {
 
     private final OutboxRepository outbox;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final EventSender eventSender;
     private final Clock clock;
     private final String topic;
     private final int batchSize;
@@ -32,13 +30,13 @@ public class OutboxEventPublisher {
 
     public OutboxEventPublisher(
             OutboxRepository outbox,
-            KafkaTemplate<String, String> kafkaTemplate,
+            EventSender eventSender,
             Clock clock,
             MeterRegistry meterRegistry,
             @Value("${loan-platform.events.topic}") String topic,
             @Value("${loan-platform.outbox.batch-size:50}") int batchSize) {
         this.outbox = outbox;
-        this.kafkaTemplate = kafkaTemplate;
+        this.eventSender = eventSender;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.topic = topic;
@@ -49,24 +47,22 @@ public class OutboxEventPublisher {
     @Transactional
     public void publishBatch() {
         for (var event : outbox.lockUnpublished(batchSize)) {
-            outbox.recordPublishAttempt(event.id());
-            try {
-                var record = new ProducerRecord<String, String>(
-                        topic, event.aggregateId().toString(), event.payload());
-                record.headers().add(
-                        CorrelationIds.HEADER,
-                        event.correlationId().getBytes(StandardCharsets.UTF_8));
-                kafkaTemplate.send(record).join();
-                outbox.markPublished(event.id(), clock.instant());
-                meterRegistry.counter("loan.outbox.publish", "result", "success").increment();
-            } catch (RuntimeException exception) {
-                meterRegistry.counter("loan.outbox.publish", "result", "failure").increment();
-                log.warn(
-                        "Outbox publication failed: eventId={}, eventType={}, attempt={}",
-                        event.id(),
-                        event.eventType(),
-                        event.publishAttempts() + 1,
-                        exception);
+            try (var ignoredRequest = MDC.putCloseable("requestId", event.requestId());
+                 var ignoredApplication = MDC.putCloseable("applicationId", event.aggregateId().toString());
+                 var ignoredEvent = MDC.putCloseable("eventId", event.id().toString())) {
+                outbox.recordPublishAttempt(event.id());
+                try {
+                    eventSender.send(topic, event);
+                    outbox.markPublished(event.id(), clock.instant());
+                    meterRegistry.counter("loan.outbox.publish", "result", "success").increment();
+                } catch (RuntimeException exception) {
+                    meterRegistry.counter("loan.outbox.publish", "result", "failure").increment();
+                    log.warn(
+                            "Outbox event publication failed: eventType={}, attempt={}",
+                            event.eventType(),
+                            event.publishAttempts() + 1,
+                            exception);
+                }
             }
         }
     }

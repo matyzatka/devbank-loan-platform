@@ -1,0 +1,55 @@
+# Architecture and Event Flow
+
+## Runtime responsibilities
+
+### Loan API
+
+- accepts REST commands and queries;
+- owns the primary `LoanApplication` state;
+- enforces HTTP idempotency;
+- stores state changes, audit records, and outbox events atomically;
+- publishes pending outbox events;
+- does not consume its own Kafka events.
+
+### Loan Processing Worker
+
+- runs without an HTTP server;
+- consumes only `LoanApplicationSubmitted`;
+- claims `eventId` for idempotent processing;
+- compares event data with the persisted application;
+- records the preliminary validation and process-check result;
+- moves the application from `SUBMITTED` to `UNDER_REVIEW`;
+- creates the audit entry and follow-up outbox event in the same database transaction.
+
+## Successful flow
+
+1. The client sends `POST /api/v1/applications` with an `Idempotency-Key`.
+2. Loan API atomically stores the application, idempotency record, `SUBMITTED` audit entry, and outbox event.
+3. The publisher sends `LoanApplicationSubmitted` to Kafka.
+4. The worker atomically claims its `eventId` in `processed_event`.
+5. The worker verifies `applicationId`, `customerId`, `amount`, and `currency` against the database.
+6. It stores `PASSED` in `loan_preprocessing_result`.
+7. It changes the state to `UNDER_REVIEW`, increments `version`, and writes the audit entry.
+8. The same transaction creates `LoanApplicationStatusChanged` in the outbox.
+9. Loan API publishes that follow-up event. The worker ignores it because it handles submitted events only.
+10. A user can approve or reject the application through Loan API.
+
+## Duplicate HTTP request
+
+`idempotency_record` binds the key to a canonical payload hash and application ID. Repeating the same key and payload returns the original application. Reusing the key with a different payload returns a conflict. Neither case creates a second submitted event.
+
+## Duplicate Kafka event
+
+The `processed_event` claim, processing result, state mutation, audit entry, and follow-up outbox event share one transaction. A duplicate `eventId` therefore creates no additional result or transition.
+
+## Failure before publication acknowledgement
+
+Application state and outbox rows commit before asynchronous publication begins. When Kafka is unavailable, `published_at` stays empty and `publish_attempts` increments. A later publisher cycle retries the event. The automated test uses a deterministic failing sender; it does not claim to simulate every possible process crash.
+
+## Worker failure
+
+If processing fails before the database commit, the `processed_event` claim rolls back with all other worker writes. Kafka retries the record; after the configured attempts are exhausted, it is routed to `.DLT`.
+
+## Demonstrator boundary
+
+The preliminary check is not credit scoring. A shared database keeps the local demonstration compact and allows the worker to update the aggregate atomically. With separate database ownership, the worker would send a command or result event back to the aggregate owner instead of updating its tables directly. That alternative is a future proposal only.

@@ -22,16 +22,22 @@ public class LoanApplicationService {
     private final LoanApplicationRepository applications;
     private final IdempotencyRepository idempotency;
     private final OutboxRepository outbox;
+    private final StatusHistoryRepository statusHistory;
+    private final RequestIdProvider requestIds;
     private final Clock clock;
 
     public LoanApplicationService(
             LoanApplicationRepository applications,
             IdempotencyRepository idempotency,
             OutboxRepository outbox,
+            StatusHistoryRepository statusHistory,
+            RequestIdProvider requestIds,
             Clock clock) {
         this.applications = applications;
         this.idempotency = idempotency;
         this.outbox = outbox;
+        this.statusHistory = statusHistory;
+        this.requestIds = requestIds;
         this.clock = clock;
     }
 
@@ -58,13 +64,18 @@ public class LoanApplicationService {
                 command.currency(),
                 clock);
         applications.insert(application);
+        var eventId = UUID.randomUUID();
         outbox.append(new LoanApplicationSubmittedEvent(
-                UUID.randomUUID(),
+                eventId,
                 application.getId(),
                 application.getCustomerId(),
                 application.getAmount(),
                 application.getCurrency().getCurrencyCode(),
                 application.getCreatedAt()));
+        statusHistory.append(
+                application.getId(), null, application.getStatus(), application.getVersion(),
+                application.getCreatedAt(), StatusChangeSource.API,
+                requestIds.currentOrGenerate(), eventId);
         return application;
     }
 
@@ -77,10 +88,10 @@ public class LoanApplicationService {
     @Transactional(readOnly = true)
     public LoanApplicationPage list(LoanApplicationStatus status, String query, int page, int size) {
         if (page < 0) {
-            throw new IllegalArgumentException("page must not be negative");
+            throw new IllegalArgumentException("Page number must not be negative");
         }
         if (size < 1 || size > 100) {
-            throw new IllegalArgumentException("size must be between 1 and 100");
+            throw new IllegalArgumentException("Page size must be between 1 and 100");
         }
         var normalizedQuery = query == null || query.isBlank() ? null : query.trim();
         return new LoanApplicationPage(
@@ -91,42 +102,69 @@ public class LoanApplicationService {
     }
 
     @Transactional
-    public LoanApplication startReview(UUID applicationId) {
-        return changeStatus(applicationId, application -> application.startReview(clock));
+    public LoanApplication startReviewFromWorker(
+            UUID applicationId,
+            String requestId,
+            UUID consumedEventId) {
+        return changeStatus(
+                applicationId,
+                application -> application.startReview(clock),
+                StatusChangeSource.WORKER,
+                requestId,
+                consumedEventId);
     }
 
     @Transactional
     public LoanApplication approve(UUID applicationId) {
-        return changeStatus(applicationId, application -> application.approve(clock));
+        return changeStatus(
+                applicationId,
+                application -> application.approve(clock),
+                StatusChangeSource.API,
+                requestIds.currentOrGenerate(),
+                null);
     }
 
     @Transactional
     public LoanApplication reject(UUID applicationId) {
-        return changeStatus(applicationId, application -> application.reject(clock));
+        return changeStatus(
+                applicationId,
+                application -> application.reject(clock),
+                StatusChangeSource.API,
+                requestIds.currentOrGenerate(),
+                null);
     }
 
     private LoanApplication changeStatus(
             UUID applicationId,
-            Consumer<LoanApplication> transition) {
+            Consumer<LoanApplication> transition,
+            StatusChangeSource source,
+            String requestId,
+            UUID causationEventId) {
         var application = get(applicationId);
         var previousStatus = application.getStatus();
         var expectedVersion = application.getVersion();
         transition.accept(application);
         applications.update(application, expectedVersion);
-        appendStatusChanged(application, previousStatus);
+        var emittedEventId = appendStatusChanged(application, previousStatus);
+        statusHistory.append(
+                application.getId(), previousStatus, application.getStatus(), application.getVersion(),
+                application.getUpdatedAt(), source, requestId,
+                causationEventId == null ? emittedEventId : causationEventId);
         return application;
     }
 
-    private void appendStatusChanged(
+    private UUID appendStatusChanged(
             LoanApplication application,
             LoanApplicationStatus previousStatus) {
+        var eventId = UUID.randomUUID();
         outbox.append(new LoanApplicationStatusChangedEvent(
-                UUID.randomUUID(),
+                eventId,
                 application.getId(),
                 previousStatus,
                 application.getStatus(),
                 application.getVersion(),
                 application.getUpdatedAt()));
+        return eventId;
     }
 
     private static String requestHash(CreateLoanApplicationCommand command) {

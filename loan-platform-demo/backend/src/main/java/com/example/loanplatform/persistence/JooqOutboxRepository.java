@@ -35,7 +35,7 @@ public class JooqOutboxRepository implements OutboxRepository {
     private static final Field<OffsetDateTime> OCCURRED_AT = field(name("occurred_at"), OffsetDateTime.class);
     private static final Field<OffsetDateTime> PUBLISHED_AT = field(name("published_at"), OffsetDateTime.class);
     private static final Field<Integer> PUBLISH_ATTEMPTS = field(name("publish_attempts"), Integer.class);
-    private static final Field<String> CORRELATION_ID = field(name("correlation_id"), String.class);
+    private static final Field<String> REQUEST_ID = field(name("request_id"), String.class);
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
@@ -50,7 +50,7 @@ public class JooqOutboxRepository implements OutboxRepository {
     @Override
     public void append(LoanApplicationEvent event) {
         dsl.insertInto(OUTBOX)
-                .columns(ID, AGGREGATE_ID, EVENT_TYPE, SCHEMA_VERSION, PAYLOAD, OCCURRED_AT, CORRELATION_ID)
+                .columns(ID, AGGREGATE_ID, EVENT_TYPE, SCHEMA_VERSION, PAYLOAD, OCCURRED_AT, REQUEST_ID)
                 .values(
                         event.eventId(),
                         event.applicationId(),
@@ -64,7 +64,7 @@ public class JooqOutboxRepository implements OutboxRepository {
 
     @Override
     public List<PendingOutboxEvent> lockUnpublished(int batchSize) {
-        return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, CORRELATION_ID, PUBLISH_ATTEMPTS)
+        return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, REQUEST_ID, PUBLISH_ATTEMPTS)
                 .from(OUTBOX)
                 .where(PUBLISHED_AT.isNull())
                 .orderBy(OCCURRED_AT, ID)
@@ -77,7 +77,7 @@ public class JooqOutboxRepository implements OutboxRepository {
                         record.get(EVENT_TYPE),
                         record.get(PAYLOAD).data(),
                         record.get(OCCURRED_AT).toInstant(),
-                        record.get(CORRELATION_ID),
+                        record.get(REQUEST_ID),
                         record.get(PUBLISH_ATTEMPTS)));
     }
 

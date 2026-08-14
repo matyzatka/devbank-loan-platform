@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.example.loanplatform.domain.LoanApplicationStatus;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -26,6 +28,10 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/applications")
 @Slf4j
+@ConditionalOnProperty(
+        name = "loan-platform.api.enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class LoanApplicationController {
 
     private final LoanApplicationService service;
@@ -39,10 +45,10 @@ public class LoanApplicationController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Application created or original idempotent response returned"),
             @ApiResponse(responseCode = "400", description = "Request validation failed"),
-            @ApiResponse(responseCode = "409", description = "Idempotency key conflicts with an earlier request")
+            @ApiResponse(responseCode = "409", description = "Idempotency key conflicts with a previous request")
     })
     public ResponseEntity<LoanApplicationResponse> create(
-            @Parameter(required = true, description = "Unique key for safely retrying this request")
+            @Parameter(required = true, description = "Unique key for safely retrying the request")
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateLoanApplicationRequest request) {
         var application = service.create(new CreateLoanApplicationCommand(
@@ -54,10 +60,9 @@ public class LoanApplicationController {
                 .path("/{id}")
                 .buildAndExpand(application.getId())
                 .toUri();
-        log.info(
-                "Loan application submitted: applicationId={}, status={}",
-                application.getId(),
-                application.getStatus());
+        try (var ignored = MDC.putCloseable("applicationId", application.getId().toString())) {
+            log.info("Loan application submitted: status={}", application.getStatus());
+        }
         return ResponseEntity.created(location)
                 .body(LoanApplicationResponse.from(application));
     }
@@ -78,12 +83,6 @@ public class LoanApplicationController {
         return LoanApplicationPageResponse.from(service.list(status, query, page, size));
     }
 
-    @PostMapping("/{id}/review")
-    @Operation(summary = "Move a submitted application under review")
-    public LoanApplicationResponse review(@PathVariable UUID id) {
-        return transitionCompleted(service.startReview(id));
-    }
-
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve an application under review")
     public LoanApplicationResponse approve(@PathVariable UUID id) {
@@ -98,11 +97,12 @@ public class LoanApplicationController {
 
     private static LoanApplicationResponse transitionCompleted(
             com.example.loanplatform.domain.LoanApplication application) {
-        log.info(
-                "Loan application status changed: applicationId={}, status={}, version={}",
-                application.getId(),
-                application.getStatus(),
-                application.getVersion());
+        try (var ignored = MDC.putCloseable("applicationId", application.getId().toString())) {
+            log.info(
+                    "Loan application status changed: status={}, version={}",
+                    application.getStatus(),
+                    application.getVersion());
+        }
         return LoanApplicationResponse.from(application);
     }
 

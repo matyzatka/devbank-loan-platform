@@ -33,6 +33,6 @@ export function createApplication(input: CreateApplicationInput) {
   })
 }
 
-export function transitionApplication(id: string, action: 'review' | 'approve' | 'reject') {
+export function transitionApplication(id: string, action: 'approve' | 'reject') {
   return apiRequest<LoanApplication>(`/api/v1/applications/${id}/${action}`, { method: 'POST' })
 }
