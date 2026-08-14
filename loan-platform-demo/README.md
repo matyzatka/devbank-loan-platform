@@ -19,6 +19,8 @@ The React and TypeScript operations UI provides a searchable, filterable and pag
 
 The operational baseline now includes correlation IDs propagated from HTTP through the transactional outbox and Kafka headers, liveness/readiness probes, graceful shutdown, and Micrometer metrics for outbox backlog, oldest-event age, and publish outcomes. The `prod` Spring profile emits Logstash-compatible structured JSON logs and disables public API documentation.
 
+Logging is intentionally signal-oriented: application lifecycle and loan workflow outcomes remain at `INFO`; Kafka client internals, Spring Kafka coordination, and jOOQ internals emit only `WARN` or above. Publication failures and dead-letter processing remain visible, while broker configuration dumps, rebalances, and Nginx access noise are suppressed. Detailed Kafka troubleshooting can be enabled temporarily with `LOGGING_LEVEL_ORG_APACHE_KAFKA=INFO`.
+
 ## Proposed structure
 
 ```text

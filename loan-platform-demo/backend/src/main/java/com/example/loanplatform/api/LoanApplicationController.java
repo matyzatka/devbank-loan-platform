@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.example.loanplatform.domain.LoanApplicationStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/applications")
+@Slf4j
 public class LoanApplicationController {
 
     private final LoanApplicationService service;
@@ -52,6 +54,10 @@ public class LoanApplicationController {
                 .path("/{id}")
                 .buildAndExpand(application.getId())
                 .toUri();
+        log.info(
+                "Loan application submitted: applicationId={}, status={}",
+                application.getId(),
+                application.getStatus());
         return ResponseEntity.created(location)
                 .body(LoanApplicationResponse.from(application));
     }
@@ -75,19 +81,29 @@ public class LoanApplicationController {
     @PostMapping("/{id}/review")
     @Operation(summary = "Move a submitted application under review")
     public LoanApplicationResponse review(@PathVariable UUID id) {
-        return LoanApplicationResponse.from(service.startReview(id));
+        return transitionCompleted(service.startReview(id));
     }
 
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve an application under review")
     public LoanApplicationResponse approve(@PathVariable UUID id) {
-        return LoanApplicationResponse.from(service.approve(id));
+        return transitionCompleted(service.approve(id));
     }
 
     @PostMapping("/{id}/reject")
     @Operation(summary = "Reject an application under review")
     public LoanApplicationResponse reject(@PathVariable UUID id) {
-        return LoanApplicationResponse.from(service.reject(id));
+        return transitionCompleted(service.reject(id));
+    }
+
+    private static LoanApplicationResponse transitionCompleted(
+            com.example.loanplatform.domain.LoanApplication application) {
+        log.info(
+                "Loan application status changed: applicationId={}, status={}, version={}",
+                application.getId(),
+                application.getStatus(),
+                application.getVersion());
+        return LoanApplicationResponse.from(application);
     }
 
     private static Currency parseCurrency(String currencyCode) {

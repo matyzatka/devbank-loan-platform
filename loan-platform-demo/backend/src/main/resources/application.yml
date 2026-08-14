@@ -58,3 +58,10 @@ management:
 
 server:
   shutdown: graceful
+
+logging:
+  level:
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+    org.jooq: WARN
+    org.springdoc.core.events.SpringDocAppInitializer: ERROR
