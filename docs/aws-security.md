@@ -1,6 +1,6 @@
 # Bezpečnostní návrh pro AWS
 
-Dokument stanovuje bezpečnostní model cílové AWS architektury. Přihlašovací údaje ani hodnoty secrets nejsou součástí repozitáře.
+Dokument stanovuje ochranné mechanismy [cílové AWS architektury](aws-architecture.md). Přihlašovací údaje ani hodnoty secrets nejsou součástí repozitáře.
 
 ## Zásady
 

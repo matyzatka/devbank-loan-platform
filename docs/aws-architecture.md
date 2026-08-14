@@ -1,109 +1,72 @@
-# Návrh AWS architektury
+# AWS architektura
 
-Dokument popisuje cílovou AWS architekturu. Aktuální repozitář obsahuje lokální běhové prostředí; cloudová infrastruktura bude implementována jako samostatná navazující vrstva.
+Dokument popisuje cílovou cloudovou topologii a dvě úrovně provozu. Bezpečnostní pravidla rozvádí [bezpečnostní model](aws-security.md); release a provozní lifecycle řeší [plán deploymentu](aws-deployment-plan.md).
 
-## Výchozí stav aplikace
+## Společný model
 
-Návrh vychází z existujících image a rolí v repozitáři:
+Existující kontejnery se nasazují bez změny aplikačních rolí:
 
-- `frontend/Dockerfile` sestaví React aplikaci a servíruje ji přes Nginx; proměnná `BACKEND_URL` určuje upstream API;
-- `backend/Dockerfile` sestaví Java 21 Spring Boot image, který běží jako neprivilegovaný uživatel;
-- stejný backendový image se spouští jako `loan-api` nebo `processing-worker` pomocí `LOAN_PLATFORM_*_ENABLED`;
-- API atomicky ukládá žádost, audit a outbox do PostgreSQL a následně publikuje do Kafky;
-- worker konzumuje událost, provádí idempotentní předběžnou kontrolu a mění stav na `UNDER_REVIEW`;
-- Flyway spravuje schéma a Actuator poskytuje `/actuator/health/liveness` a `/actuator/health/readiness`.
-
-## Společný cílový model
-
-Každý image má vlastní ECR repository. ECS cluster provozuje tři oddělené služby: frontend, API a worker. Application Load Balancer zpřístupňuje pouze frontend; Nginx předává `/api` na interní API přes AWS Cloud Map nebo interní ALB. Worker ani datové služby nejsou veřejné.
+- ECR uchovává samostatný frontendový a backendový image;
+- ECS/Fargate provozuje služby `frontend`, `loan-api` a `processing-worker`;
+- Application Load Balancer zpřístupňuje pouze frontend;
+- Nginx směruje `/api` na privátní Loan API;
+- API a worker používají společný PostgreSQL cluster a Kafka-compatible broker;
+- CloudWatch centralizuje strukturované logy, metriky a alarmy;
+- Secrets Manager poskytuje aplikační přihlašovací údaje za běhu.
 
 ```mermaid
 flowchart TB
-    U["Uživatel / prohlížeč"] -->|"HTTPS 443"| ALB["Application Load Balancer"]
-    ALB --> FE["ECS/Fargate · frontend · Nginx/React"]
-    FE -->|"REST přes privátní DNS"| API["ECS/Fargate · loan-api"]
-    API -->|"JDBC TLS"| PG[("PostgreSQL")]
-    API -->|"outbox → TLS/SASL"| K[("Kafka")]
-    K -->|"LoanApplicationSubmitted"| W["ECS/Fargate · processing-worker"]
-    W -->|"JDBC TLS"| PG
-    FE -.-> CW["CloudWatch Logs/Metrics"]
+    U["Uživatel"] -->|"HTTPS 443"| ALB["Application Load Balancer"]
+    ALB --> FE["ECS/Fargate · Frontend"]
+    FE -->|"privátní REST"| API["ECS/Fargate · Loan API"]
+    API -->|"JDBC/TLS"| PG[("PostgreSQL")]
+    API -->|"TLS/SASL"| K[("Kafka")]
+    K --> W["ECS/Fargate · Processing Worker"]
+    W -->|"JDBC/TLS"| PG
+    FE -.-> CW["CloudWatch"]
     API -.-> CW
     W -.-> CW
-    SM["Secrets Manager"] --> API
-    SM --> W
-    ECR["Amazon ECR"] --> FE
+    ECR["ECR"] --> FE
     ECR --> API
     ECR --> W
-    GHA["GitHub Actions · OIDC"] --> ECR
-    GHA --> ECS["ECS deployment"]
-    ECS --> FE
-    ECS --> API
-    ECS --> W
+    SM["Secrets Manager"] --> API
+    SM --> W
 ```
 
-## Varianta A — nákladově úsporné ukázkové prostředí
+ECS tasky běží v privátních subnetech bez veřejných IP adres. ALB je jediným veřejným vstupem; databáze, broker, API a worker přijímají provoz pouze z odpovídajících security groups.
 
-Varianta je určená pro krátkodobý provoz s fiktivními daty a zachovává skutečný kontejnerový a event-driven tok.
+## Varianta A — ukázkové prostředí
 
-- jeden ECS cluster a tři Fargate services s jedním taskem každé aplikační role;
-- internet-facing ALB pouze pro frontend, API dostupné jen uvnitř VPC;
-- Amazon RDS for PostgreSQL v úsporné Single-AZ konfiguraci se šifrováním a automatickými zálohami;
-- Kafka v KRaft režimu jako jeden dočasný task s EFS volume a privátním DNS;
-- dvě Availability Zones pro ALB, aplikační tasky a subnety; databáze ani broker nemají vysokou dostupnost;
-- malé task sizes, krátká retence CloudWatch logů a automatické škálování aplikačních služeb omezené na malé maximum;
-- prostředí se spouští pouze na vymezenou dobu a po jejím uplynutí se celé odstraní.
+Krátkodobá varianta zachovává plný aplikační a event-driven tok při kontrolovaných nákladech:
 
-Single-AZ databáze a jednouzlová Kafka jsou vědomé kompromisy vyhrazené pro ukázkové prostředí. Restart nebo přesun brokeru, EFS latence či výpadek jediné AZ mohou přerušit provoz. Tato varianta nemá produkční SLA a nesmí nést reálná data.
+- jeden task pro každou aplikační službu;
+- RDS for PostgreSQL v šifrované Single-AZ konfiguraci s automatickými zálohami;
+- jeden Kafka broker v KRaft režimu na Fargate s EFS a privátním DNS;
+- dvě Availability Zones pro ALB, aplikační subnety a plánování tasků;
+- krátká retence logů, malé horní limity škálování a povinné datum ukončení prostředí.
 
-## Varianta B — realističtější produkční základ
+Single-AZ databáze a jednouzlový broker neposkytují vysokou dostupnost. Varianta je určená výhradně pro fiktivní data a nemá produkční SLA.
 
-- ECS/Fargate služby rozložené alespoň do dvou Availability Zones;
-- veřejný ALB pro frontend a interní ALB nebo Cloud Map pro API;
-- Amazon RDS for PostgreSQL v Multi-AZ režimu, šifrovaný KMS klíčem, s automatickými zálohami a případně RDS Proxy;
-- Amazon MSK Provisioned pro stabilní bankovní workload, nejméně tři brokers napříč AZ; pro proměnlivý menší provoz lze samostatně vyhodnotit MSK Serverless;
-- TLS pro databázi i Kafka spojení, MSK autentizace přes SASL/SCRAM nebo IAM po doplnění kompatibilní klientské konfigurace;
-- více tasků API a workeru, target tracking autoscaling a deployment circuit breaker;
-- AWS WAF před ALB, vlastní KMS klíče, delší log retention, alarmy a provozní dashboard;
-- oddělené účty nebo minimálně oddělené VPC a role pro test a produkci.
+## Varianta B — produkční prostředí
 
-## Spring Boot runtime
+Trvalý provoz nahrazuje úsporné kompromisy spravovanou datovou vrstvou a redundancí:
 
-API a worker používají tentýž immutable image označený Git SHA. Rozdíl vytváří pouze ECS task definition:
+- více tasků každé aplikační služby napříč nejméně dvěma Availability Zones;
+- RDS for PostgreSQL Multi-AZ se šifrováním, automatickými zálohami, deletion protection a vyhodnoceným použitím RDS Proxy;
+- MSK Provisioned s nejméně třemi brokery napříč AZ; MSK Serverless je alternativou až po kapacitním a nákladovém posouzení;
+- interní service discovery nebo interní ALB pro Loan API;
+- WAF před veřejným ALB, řízené KMS klíče a oddělená prostředí;
+- target tracking autoscaling a deployment circuit breaker pro aplikační služby.
 
-| Proměnná | API | Worker |
-|---|---:|---:|
-| `SPRING_PROFILES_ACTIVE` | `prod` | `prod` |
-| `LOAN_PLATFORM_API_ENABLED` | `true` | `false` |
-| `LOAN_PLATFORM_WORKER_ENABLED` | `false` | `true` |
-| `LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED` | `true` | `false` |
-| `LOAN_PLATFORM_DEMO_DATA_ENABLED` | `false` | `false` |
-| `SPRING_MAIN_WEB_APPLICATION_TYPE` | výchozí | `none` |
+## Srovnání variant
 
-API má readiness health check na `/actuator/health/readiness`. Worker nevystavuje HTTP, proto jeho zdraví nelze odvozovat pouze od běžícího procesu: produkční návrh má doplnit metriku stáří posledního zpracovaného eventu, consumer lag a alarm při opakovaných restartech.
-
-## Databáze a migrace
-
-JDBC URL a uživatelské jméno jsou běžné environment variables; heslo přichází z Secrets Manageru přes `secrets` v ECS task definition. Spojení má používat TLS (`sslmode=verify-full`) a DNS endpoint databáze.
-
-Flyway v ukázkovém prostředí běží při startu aplikace. Produkční varianta používá jednorázový ECS migration task se samostatnou IAM/execution konfigurací spuštěný před rolloutem API a workeru. Aplikační DB uživatel pak nemusí dlouhodobě vlastnit DDL oprávnění. Migrace musí být zpětně kompatibilní s předchozí verzí aplikace.
-
-## Kafka
-
-`SPRING_KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC` a `KAFKA_CONSUMER_GROUP_ID` zůstávají runtime konfigurací. Topic se nevytváří implicitně aplikací; produkčně jej spravuje infrastruktura s explicitním počtem partitions, replication factor, retencí a politikou šifrování.
-
-At-least-once doručení je očekávané. Databázová tabulka `processed_event` zachovává idempotenci workeru, transactional outbox chrání před ztrátou události po commitu business transakce. Provoz musí alarmovat na rostoucí outbox backlog a consumer lag.
-
-## Srovnání
-
-| Oblast | A: ukázkové prostředí | B: produkční prostředí |
+| Oblast | Ukázkové prostředí | Produkční prostředí |
 |---|---|---|
-| Aplikační compute | ECS/Fargate, 1 task/role | ECS/Fargate, více tasků a AZ |
-| PostgreSQL | RDS PostgreSQL Single-AZ | RDS PostgreSQL Multi-AZ |
-| Kafka | jeden broker + EFS, bez SLA | MSK Provisioned / posouzený Serverless |
-| Odolnost | nízká, bez SLA | multi-AZ, zálohy, alarmy |
-| Náklady | nižší, zejména při krátkém běhu | výrazně vyšší stálé náklady |
-| Vhodnost pro data | pouze fiktivní | po security a compliance doplnění |
+| Aplikační compute | 1 Fargate task na roli | více tasků napříč AZ |
+| PostgreSQL | RDS Single-AZ | RDS Multi-AZ |
+| Kafka | jeden broker na Fargate | Amazon MSK |
+| Dostupnost | bez SLA | redundance a řízená obnova |
+| Data | pouze fiktivní | po dokončení security a compliance kontrol |
+| Provoz | časově omezený | trvalý, monitorovaný |
 
-## Doporučená varianta
-
-Pro ukázkové nasazení je vhodná varianta A. Zachovává ECR, ECS/Fargate, oddělené procesní role, bezpečnou správu přihlašovacích údajů, observabilitu a kompletní Kafka tok bez stálých nákladů tříbrokerového MSK clusteru a Multi-AZ RDS. Varianta B zůstává cílovou architekturou pro trvalý provoz a práci s reálnými daty; datové kontejnery varianty A ji nenahrazují.
+Pro krátkodobé ukázkové nasazení je přiměřená varianta A. Varianta B je výchozím modelem pro trvalý provoz a práci s reálnými daty.

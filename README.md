@@ -5,167 +5,56 @@
 [![React](https://img.shields.io/badge/React-TypeScript-149ECA)](frontend/package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-DevBank je platforma pro zpracování žádostí o korporátní úvěry. Odděluje REST API a asynchronní processing worker, používá PostgreSQL, transactional outbox, Kafka, idempotentní zpracování a auditní stopu. Operátorské UI je v češtině.
+DevBank zpracovává žádosti o korporátní úvěry od založení přes automatickou předběžnou kontrolu až po rozhodnutí specialisty. Loan API a Processing Worker běží jako samostatné procesy nad PostgreSQL a Kafkou; transactional outbox, idempotence, optimistic locking a auditní stopa chrání konzistenci celého toku.
 
-> **Demo prostředí:** systém používá výhradně fiktivní data a neprovádí skutečný úvěrový scoring.
+> **Ukázkové prostředí:** systém používá výhradně fiktivní data a neprovádí úvěrový scoring.
 
-Hlavní architektonická rozhodnutí:
+## Technická rozhodnutí a důkazy
 
-- Loan API a Processing Worker běží jako samostatné procesy se zřetelně oddělenými odpovědnostmi;
-- business stav, auditní záznam a outbox event vznikají v jedné databázové transakci;
-- Kafka doručuje události alespoň jednou a worker zajišťuje idempotentní zpracování;
-- optimistic locking chrání stavové přechody před souběžnou změnou;
-- automatizovaný smoke test ověřuje celý tok od REST požadavku až po změnu stavu workerem.
+| Rozhodnutí | Provozní význam | Důkaz |
+|---|---|---|
+| **Skutečná procesní hranice** | Loan API přijímá commandy a publikuje outbox; Processing Worker samostatně konzumuje business události. Obě role lze nasazovat a škálovat nezávisle. | [Compose topologie](docker-compose.yml), [worker](backend/src/main/java/dev/bank/loanplatform/processing/LoanProcessingWorker.java) |
+| **Atomická business transakce** | Stav žádosti, auditní historie a outbox event se uloží společně. Databázový commit nemůže předběhnout událost potřebnou pro další zpracování. | [aplikační služba](backend/src/main/java/dev/bank/loanplatform/application/LoanApplicationService.java), [repository test](backend/src/test/java/dev/bank/loanplatform/persistence/JooqLoanApplicationRepositoryTest.java) |
+| **Transactional outbox připravený na více instancí** | Publisher zamyká dávku přes `FOR UPDATE SKIP LOCKED`, čeká na potvrzení brokeru a eviduje každý pokus. Selhání ponechá event k bezpečnému opakování. | [outbox repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqOutboxRepository.java), [failure test](backend/src/test/java/dev/bank/loanplatform/messaging/OutboxPublicationFailureTest.java) |
+| **At-least-once bez dvojího business účinku** | Worker atomicky registruje `eventId`; opakované doručení stejné události stav podruhé nezmění. | [processed-event repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqProcessedEventRepository.java), [Kafka integrační test](backend/src/test/java/dev/bank/loanplatform/messaging/KafkaOutboxIntegrationTest.java) |
+| **Řízené souběžné změny** | Explicitní stavový automat odmítá neplatné přechody a compare-and-set update chrání agregát před ztracenou aktualizací. | [doménový model](backend/src/main/java/dev/bank/loanplatform/domain/LoanApplication.java), [optimistic locking test](backend/src/test/java/dev/bank/loanplatform/persistence/JooqLoanApplicationRepositoryTest.java) |
+| **Idempotentní HTTP commandy** | `Idempotency-Key` váže výsledek na hash požadavku: opakování vrací původní žádost, kolize s jiným obsahem končí konfliktem. | [idempotency repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqIdempotencyRepository.java), [API test](backend/src/test/java/dev/bank/loanplatform/api/LoanApplicationControllerTest.java) |
+| **Kontrolované selhání zpráv** | Dočasná chyba spustí omezený retry; nezpracovatelná událost skončí v dead-letter topicu místo nekonečné retry smyčky. | [Kafka konfigurace](backend/src/main/java/dev/bank/loanplatform/configuration/KafkaConfiguration.java), [DLT test](backend/src/test/java/dev/bank/loanplatform/messaging/KafkaOutboxIntegrationTest.java) |
+| **Audit a end-to-end korelace** | `requestId`, `applicationId` a `eventId` propojují HTTP, outbox, Kafka consumer i auditní historii bez logování celého citlivého payloadu. | [correlation filter](backend/src/main/java/dev/bank/loanplatform/api/CorrelationIdFilter.java), [strukturované logování](backend/src/main/resources/application-prod.yml) |
+| **Provozní signály, ne pouze technické logy** | Readiness/liveness, graceful shutdown, počet čekajících eventů a stáří nejstaršího outbox záznamu poskytují měřitelné signály pro rollout a alerting. | [Actuator konfigurace](backend/src/main/resources/application.yml), [outbox metriky](backend/src/main/java/dev/bank/loanplatform/messaging/OutboxMetrics.java) |
+| **Reprodukovatelnost od checkoutu po event flow** | Flyway verzovaně vytvoří schéma, multi-stage image běží pod neprivilegovaným uživatelem a CI ověří testy, oba image i celý asynchronní tok. | [migrace](backend/src/main/resources/db/migration), [backend image](backend/Dockerfile), [CI](.github/workflows/ci.yml), [smoke test](scripts/smoke-test.ps1) |
 
-## Spuštění z čistého checkoutu
+```mermaid
+flowchart LR
+    UI["React UI"] --> API["Loan API"]
+    API -->|"stav + audit + outbox"| DB[("PostgreSQL")]
+    API --> K["Kafka"]
+    K --> W["Processing Worker"]
+    W -->|"kontrola + UNDER_REVIEW"| DB
+```
 
-Jediným požadavkem je běžící Docker Desktop s Docker Compose. Lokální hodnoty lze volitelně změnit zkopírováním ukázkové konfigurace; žádný skutečný `.env` se do Gitu neukládá.
+## Rychlý start
+
+Požadavkem je pouze Docker Desktop s Docker Compose.
 
 ```powershell
 git clone https://github.com/matyzatka/devbank-loan-platform.git
 cd devbank-loan-platform
-Copy-Item .env.example .env   # volitelné; Compose má bezpečné lokální výchozí hodnoty
 docker compose up --build
 ```
 
-Na Linuxu nebo macOS použijte místo `Copy-Item` příkaz `cp .env.example .env`.
-
-Po dokončení healthchecků jsou dostupné:
+Po dokončení health checků:
 
 - UI: http://localhost:3000/applications
 - OpenAPI: http://localhost:8080/swagger-ui.html
 - readiness: http://localhost:8080/actuator/health/readiness
 
-Stack obsahuje pět služeb:
-
-| Služba | Úloha | Lokální port |
-|---|---|---:|
-| `frontend` | React UI servírované přes Nginx | `3000` |
-| `loan-api` | REST API, stav žádosti a outbox publisher | `8080` |
-| `processing-worker` | Kafka consumer a předběžná kontrola | pouze interní |
-| `postgres` | stav, outbox, audit a deduplikační záznamy | `5432` |
-| `kafka` | doručení business událostí | `9092` |
-
-Zastavení zachová databázová data:
-
-```powershell
-docker compose down
-```
-
-Úplný reset lokálních dat:
-
-```powershell
-docker compose down --volumes
-```
-
-## Automatizovaný smoke test
-
-Smoke test sestaví a spustí celý stack, ověří frontend a readiness API, založí žádost přes REST a čeká na tok PostgreSQL → outbox → Kafka → worker → `UNDER_REVIEW`. Nakonec ověří auditní `requestId` a `eventId`.
-
-```powershell
-./scripts/smoke-test.ps1 -Build
-```
-
-Pro jednorázový CI běh včetně odstranění kontejnerů a volumes:
+Kompletní automatizovaný smoke test:
 
 ```powershell
 ./scripts/smoke-test.ps1 -Build -Cleanup
 ```
 
-## Samostatný lokální vývoj
+## Dokumentace
 
-Nejprve lze spustit jen infrastrukturu:
-
-```powershell
-docker compose up -d postgres kafka
-```
-
-Backend API používá lokální profil, který jako jediný obsahuje `localhost` fallbacky:
-
-```powershell
-cd backend
-$env:SPRING_PROFILES_ACTIVE="local"
-$env:LOAN_PLATFORM_API_ENABLED="true"
-$env:LOAN_PLATFORM_WORKER_ENABLED="false"
-$env:LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED="true"
-mvn spring-boot:run
-```
-
-Worker se spouští jako druhý proces:
-
-```powershell
-cd backend
-$env:SPRING_PROFILES_ACTIVE="local"
-$env:SPRING_MAIN_WEB_APPLICATION_TYPE="none"
-$env:LOAN_PLATFORM_API_ENABLED="false"
-$env:LOAN_PLATFORM_WORKER_ENABLED="true"
-$env:LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED="false"
-mvn spring-boot:run
-```
-
-Frontendový Vite proxy cíl lze změnit přes `VITE_BACKEND_URL`:
-
-```powershell
-cd frontend
-$env:VITE_BACKEND_URL="http://localhost:8080"
-npm ci
-npm run dev
-```
-
-## Runtime konfigurace
-
-Compose načítá volitelné hodnoty z `.env`; úplný bezpečný příklad je v [.env.example](.env.example). Pro budoucí kontejnerové prostředí jsou podstatné zejména:
-
-- `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`;
-- `SPRING_KAFKA_BOOTSTRAP_SERVERS`, `SPRING_KAFKA_CONSUMER_GROUP_ID`;
-- `KAFKA_TOPIC` a `SERVER_PORT`;
-- `LOAN_PLATFORM_API_ENABLED`, `LOAN_PLATFORM_WORKER_ENABLED`, `LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED`;
-- `LOAN_PLATFORM_DEMO_DATA_ENABLED`;
-- frontendový `BACKEND_URL` pro Nginx reverse proxy.
-
-Hlavní konfigurace neobsahuje cloudové adresy ani přihlašovací údaje. `application-local.yml` izoluje lokální výchozí hodnoty a `application-prod.yml` zapíná strukturované logování, vypíná demo data a OpenAPI UI. Produkční secrets musí být dodány z runtime secret store; nejsou součástí image ani repozitáře.
-
-## Kontroly kvality
-
-```powershell
-cd backend
-mvn test
-```
-
-```powershell
-cd frontend
-npm ci
-npm run lint
-npm test
-npm run build
-```
-
-CI provádí backendové a frontendové testy, sestaví oba Docker image a spustí plný lokální event-flow smoke test. Workflow neobsahuje AWS přihlašovací údaje, deployment ani publikování image.
-
-## Architektura a spolehlivost
-
-```mermaid
-flowchart LR
-    UI["React UI"] -->|REST| API["Loan API"]
-    API -->|stav + audit + outbox v jedné transakci| DB[(PostgreSQL)]
-    API -->|publikace outboxu| K[Kafka]
-    K -->|LoanApplicationSubmitted| W["Processing Worker"]
-    W -->|deduplikace + kontrola + UNDER_REVIEW| DB
-```
-
-- workflow `SUBMITTED → UNDER_REVIEW → APPROVED | REJECTED`;
-- Flyway reprodukovatelně inicializuje databázové schéma;
-- HTTP commandy a Kafka consumer jsou idempotentní;
-- optimistic locking chrání souběžné změny;
-- logovací kontext obsahuje `requestId`, `applicationId` a `eventId` bez celých business payloadů;
-- deterministický seeder je bezpečný při startu více instancí.
-
-Podrobnosti jsou v [architektonické dokumentaci](docs/ARCHITECTURE.md) a v [produktovém briefu](brief.md).
-
-## Stav přípravy na AWS
-
-Repozitář zatím neobsahuje cloudový deployment a žádné AWS zdroje nevytváří. Aplikační kontejnery jsou připravené přijímat runtime konfiguraci vhodnou pro ECS/Fargate. Cílovou topologii, bezpečnostní model a řízený deployment popisují:
-
-- [AWS architektura](docs/aws-architecture.md);
-- [bezpečnostní model AWS](docs/aws-security.md);
-- [plán AWS deploymentu](docs/aws-deployment-plan.md).
+[Dokumentační rozcestník](docs/README.md) odděluje produktový kontext, aplikační architekturu, lokální provoz a návrh AWS nasazení. Cloudová část popisuje budoucí stav; repozitář neprovádí žádné AWS operace ani deployment.

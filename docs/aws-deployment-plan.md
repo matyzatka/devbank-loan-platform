@@ -1,6 +1,6 @@
 # Plán budoucího AWS deploymentu
 
-Dokument vymezuje postup budoucího nasazení. Implementace infrastruktury a změny AWS účtu nejsou součástí aktuálního stavu repozitáře.
+Dokument vymezuje release a provozní lifecycle pro [cílovou AWS architekturu](aws-architecture.md). Implementace infrastruktury není součástí aktuálního stavu repozitáře.
 
 ## Předpoklady a rozhodovací brána
 
@@ -15,6 +15,23 @@ Lokální CI, Compose a smoke test zůstávají první bránou. Před implementa
 5. **Observabilita:** založit log groups, dashboard a alarmy ještě před prvním aplikačním deploymentem.
 6. **Aplikační rollout:** spustit migraci, aktualizovat API/worker/frontend a provést vzdálený smoke test s fiktivní žádostí.
 7. **Acceptance:** ověřit health, stavový přechod, audit, event correlation, idempotentní replay a rollback.
+
+## Konfigurace aplikačních rolí
+
+API a worker používají stejný backendový image označený Git SHA. Jejich odpovědnost určuje ECS task definition:
+
+| Proměnná | Loan API | Processing Worker |
+|---|---:|---:|
+| `SPRING_PROFILES_ACTIVE` | `prod` | `prod` |
+| `LOAN_PLATFORM_API_ENABLED` | `true` | `false` |
+| `LOAN_PLATFORM_WORKER_ENABLED` | `false` | `true` |
+| `LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED` | `true` | `false` |
+| `LOAN_PLATFORM_DEMO_DATA_ENABLED` | `false` | `false` |
+| `SPRING_MAIN_WEB_APPLICATION_TYPE` | výchozí | `none` |
+
+JDBC URL, Kafka bootstrap servery, topic a consumer group jsou necitlivé runtime parametry. Hesla přicházejí z Secrets Manageru podle [bezpečnostního modelu](aws-security.md).
+
+Flyway v ukázkovém prostředí běží při startu aplikace. Produkční rollout používá jednorázový ECS migration task před aktualizací služeb; aplikační databázový účet díky tomu dlouhodobě nepotřebuje DDL oprávnění. Migrace musí zůstat zpětně kompatibilní s předchozí verzí aplikace.
 
 ## CI/CD z GitHub Actions
 
