@@ -50,7 +50,7 @@ export function ApplicationDetailPage() {
 
   return <div className="page detail-page">
     <Link to="/applications" className="back-link"><ArrowLeft size={17} /> Zpět na přehled</Link>
-    {wasJustCreated && <div className="success-banner"><CheckCircle2 /><span><strong>Žádost byla úspěšně založena.</strong> Událost čeká na spolehlivé zpracování přes transactional outbox.</span></div>}
+    {wasJustCreated && <div className="success-banner"><CheckCircle2 /><span><strong>Žádost byla úspěšně založena.</strong> Nyní proběhne automatická předběžná kontrola.</span></div>}
     {resultMessage && <div className="success-banner" role="status"><CheckCircle2 /><span><strong>{resultMessage}</strong></span></div>}
     <div className="detail-heading"><div><p className="eyebrow">Detail žádosti</p><h1>DB-{shortId(application.id)}</h1><div className="id-line">{application.id}<button onClick={() => void navigator.clipboard.writeText(application.id)} aria-label="Kopírovat ID"><Copy size={14} /></button></div></div><StatusBadge status={application.status} /></div>
     <div className="detail-grid">
@@ -72,12 +72,12 @@ function ProcessingEvidence({ processing, pending, error }: { processing?: Appli
     {pending ? <div className="evidence-message">Načítám auditní stopu…</div> : error ? <div className="evidence-message evidence-error">Auditní stopu se nepodařilo načíst.</div> : <>
       <div className={`preprocessing-result ${processing?.preprocessing ? 'passed' : 'waiting'}`}>
         <ShieldCheck />
-        <div><strong>{processing?.preprocessing ? 'Předběžná kontrola dokončena' : 'Předběžná kontrola čeká na zpracování'}</strong><span>{processing?.preprocessing ? 'Událost odpovídá uložené žádosti a je připravena k ručnímu posouzení.' : 'Worker zatím neuložil výsledek kontroly.'}</span>{processing?.preprocessing && <small>{formatDate(processing.preprocessing.checkedAt, true)} · Event {shortId(processing.preprocessing.eventId)}</small>}</div>
+        <div><strong>{processing?.preprocessing ? 'Předběžná kontrola dokončena' : 'Předběžná kontrola čeká na zpracování'}</strong><span>{processing?.preprocessing ? 'Žádost prošla procesní kontrolou a je připravena k posouzení specialistou.' : 'Výsledek automatické kontroly zatím není k dispozici.'}</span>{processing?.preprocessing && <small>Dokončeno {formatDate(processing.preprocessing.checkedAt, true)}</small>}</div>
       </div>
       <ol className="audit-list">{processing?.statusHistory.map(entry => <li key={entry.id}>
         <i />
         <div className="audit-entry-main"><strong>{statusLabels[entry.newStatus]}</strong><span>{entry.previousStatus ? `${statusLabels[entry.previousStatus]} → ` : ''}{statusLabels[entry.newStatus]}</span>{entry.reason && <span className="audit-reason">Důvod: {entry.reason}</span>}<small>{formatDate(entry.changedAt, true)} · {entry.changedBy === 'WORKER' ? 'Automatické zpracování' : 'Úvěrový poradce'}</small></div>
-        <details className="audit-identifiers"><summary>Technické údaje</summary><span>Verze {entry.applicationVersion}</span><span>Request {shortId(entry.requestId)}</span>{entry.eventId && <span>Event {shortId(entry.eventId)}</span>}</details>
+        <details className="audit-identifiers"><summary>Podrobnosti záznamu</summary><span>Verze žádosti {entry.applicationVersion}</span><span>Referenční ID {shortId(entry.requestId)}</span>{entry.eventId && <span>ID zpracování {shortId(entry.eventId)}</span>}</details>
       </li>)}</ol>
     </>}
   </section>
@@ -98,7 +98,7 @@ function DecisionDialog({ action, reason, pending, onReasonChange, onCancel, onC
 
 /** Maps backend workflow state to the smallest legal set of operator actions. */
 function Actions({ application, pending, onAction }: { application: LoanApplication; pending: boolean; onAction: (action: 'approve' | 'reject') => void }) {
-  if (application.status === 'SUBMITTED') return <div className="closed-state waiting-state"><Clock3 /><span><strong>Probíhá předběžná kontrola</strong><small>Worker ověřuje procesní konzistenci žádosti.</small></span></div>
+  if (application.status === 'SUBMITTED') return <div className="closed-state waiting-state"><Clock3 /><span><strong>Probíhá předběžná kontrola</strong><small>Systém automaticky ověřuje úplnost a procesní konzistenci žádosti.</small></span></div>
   if (application.status === 'UNDER_REVIEW') return <div className="decision-actions"><button className="button primary wide" disabled={pending} onClick={() => onAction('approve')}><CheckCircle2 size={18} /> Schválit žádost</button><button className="button danger wide" disabled={pending} onClick={() => onAction('reject')}><XCircle size={18} /> Zamítnout žádost</button></div>
   return <div className="closed-state"><CheckCircle2 /><span><strong>Rozhodnutí je konečné</strong><small>Stav již nelze změnit.</small></span></div>
 }

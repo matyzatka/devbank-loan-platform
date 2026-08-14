@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.example.loanplatform</groupId>
+    <groupId>dev.bank.loanplatform</groupId>
     <artifactId>loan-platform-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>loan-platform-backend</name>
