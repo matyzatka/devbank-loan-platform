@@ -13,7 +13,7 @@ This initial scaffold contains:
 - Docker and Compose placeholders;
 - reserved frontend, infrastructure, and documentation directories.
 
-The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence now uses Flyway migrations and jOOQ with optimistic locking. The broker, REST application API, frontend, and AWS infrastructure are deliberately not implemented yet.
+The domain increment adds the loan application aggregate and its explicit workflow. PostgreSQL persistence uses Flyway migrations and jOOQ with optimistic locking. The application layer now provides transactional create/get/workflow use cases, request idempotency, and a transactional outbox. The broker, REST application API, frontend, and AWS infrastructure are deliberately not implemented yet.
 
 ## Proposed structure
 

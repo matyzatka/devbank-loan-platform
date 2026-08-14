@@ -1,15 +1,20 @@
 package com.example.loanplatform.persistence;
 
 import com.example.loanplatform.application.LoanApplicationRepository;
+import com.example.loanplatform.application.LoanApplicationService;
 import com.example.loanplatform.application.OptimisticLockingConflictException;
+import com.example.loanplatform.application.CreateLoanApplicationCommand;
+import com.example.loanplatform.application.IdempotencyKeyConflictException;
+import com.example.loanplatform.application.LoanApplicationNotFoundException;
 import com.example.loanplatform.LoanPlatformApplication;
 import com.example.loanplatform.domain.LoanApplication;
 import com.example.loanplatform.domain.LoanApplicationStatus;
+import org.jooq.DSLContext;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -23,12 +28,13 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.table;
 
 @Testcontainers
 @SpringBootTest(
         classes = LoanPlatformApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Transactional
 class JooqLoanApplicationRepositoryTest {
 
     private static final Clock SUBMITTED_AT = fixedClock("2026-08-14T10:00:00Z");
@@ -40,6 +46,19 @@ class JooqLoanApplicationRepositoryTest {
 
     @Autowired
     private LoanApplicationRepository repository;
+
+    @Autowired
+    private LoanApplicationService service;
+
+    @Autowired
+    private DSLContext dsl;
+
+    @BeforeEach
+    void clearDatabase() {
+        dsl.deleteFrom(table("outbox_event")).execute();
+        dsl.deleteFrom(table("idempotency_record")).execute();
+        dsl.deleteFrom(table("loan_application")).execute();
+    }
 
     @Test
     void insertsAndRetrievesApplication() {
@@ -88,6 +107,97 @@ class JooqLoanApplicationRepositoryTest {
     @Test
     void returnsEmptyForUnknownApplication() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void createsApplicationAndOutboxEventInOneUseCase() {
+        var created = service.create(command("create-001", "2500000.00"));
+
+        assertThat(created.getStatus()).isEqualTo(LoanApplicationStatus.SUBMITTED);
+        assertThat(service.get(created.getId()).getId()).isEqualTo(created.getId());
+        assertThat(rowCount("loan_application")).isOne();
+        assertThat(rowCount("idempotency_record")).isOne();
+        assertThat(rowCount("outbox_event")).isOne();
+        var eventType = field("event_type", String.class);
+        var aggregateId = field("aggregate_id", UUID.class);
+        assertThat(dsl.select(eventType)
+                .from(table("outbox_event"))
+                .where(aggregateId.eq(created.getId()))
+                .fetchOne(eventType))
+                .isEqualTo("LoanApplicationSubmitted");
+    }
+
+    @Test
+    void returnsOriginalApplicationForRepeatedIdempotentRequest() {
+        var first = service.create(command("create-duplicate", "2500000.00"));
+        var repeated = service.create(command("create-duplicate", "2500000.0"));
+
+        assertThat(repeated.getId()).isEqualTo(first.getId());
+        assertThat(rowCount("loan_application")).isOne();
+        assertThat(rowCount("outbox_event")).isOne();
+    }
+
+    @Test
+    void rejectsIdempotencyKeyReusedForDifferentRequest() {
+        service.create(command("reused-key", "2500000.00"));
+
+        assertThatThrownBy(() -> service.create(command("reused-key", "2600000.00")))
+                .isInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageContaining("reused-key");
+
+        assertThat(rowCount("loan_application")).isOne();
+        assertThat(rowCount("outbox_event")).isOne();
+    }
+
+    @Test
+    void rollsBackIdempotencyClaimWhenCreationFails() {
+        var invalid = new CreateLoanApplicationCommand(
+                "rollback-key",
+                "CORP-123",
+                BigDecimal.ZERO,
+                Currency.getInstance("EUR"));
+
+        assertThatThrownBy(() -> service.create(invalid))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("amount must be greater than zero");
+
+        assertThat(rowCount("idempotency_record")).isZero();
+        assertThat(rowCount("loan_application")).isZero();
+        assertThat(rowCount("outbox_event")).isZero();
+    }
+
+    @Test
+    void movesApplicationThroughWorkflowAndCreatesOutboxEvents() {
+        var created = service.create(command("workflow-001", "2500000.00"));
+
+        var reviewed = service.startReview(created.getId());
+        var approved = service.approve(created.getId());
+
+        assertThat(reviewed.getStatus()).isEqualTo(LoanApplicationStatus.UNDER_REVIEW);
+        assertThat(approved.getStatus()).isEqualTo(LoanApplicationStatus.APPROVED);
+        assertThat(approved.getVersion()).isEqualTo(2);
+        assertThat(rowCount("outbox_event")).isEqualTo(3);
+    }
+
+    @Test
+    void reportsMissingApplicationFromUseCase() {
+        var unknownId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.get(unknownId))
+                .isInstanceOf(LoanApplicationNotFoundException.class)
+                .hasMessageContaining(unknownId.toString());
+    }
+
+    private int rowCount(String tableName) {
+        return dsl.fetchCount(table(tableName));
+    }
+
+    private static CreateLoanApplicationCommand command(String key, String amount) {
+        return new CreateLoanApplicationCommand(
+                key,
+                "CORP-123",
+                new BigDecimal(amount),
+                Currency.getInstance("EUR"));
     }
 
     private static LoanApplication newApplication() {
