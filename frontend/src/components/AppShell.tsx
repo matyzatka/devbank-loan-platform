@@ -21,7 +21,7 @@ export function AppShell() {
         <NavLink to="/applications" end>Žádosti</NavLink>
         <NavLink to="/applications/new">Nová žádost</NavLink>
         <span className="nav-spacer" />
-        <span className="system-state"><span /> Systémy dostupné</span>
+        <span className="system-state"><span /> Ukázkové prostředí</span>
       </nav>
       <main className="workspace"><Outlet /></main>
     </div>

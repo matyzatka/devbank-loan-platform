@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Installs the deterministic local showcase dataset once, regardless of how many API replicas start.
+ * Installs the deterministic local reference dataset once, regardless of how many API replicas start.
  * The transaction-scoped PostgreSQL lock serializes seeders while stable primary keys and conflict-safe
  * inserts make retries harmless after restarts or partially pre-populated developer databases.
  */

@@ -5,9 +5,17 @@
 [![React](https://img.shields.io/badge/React-TypeScript-149ECA)](frontend/package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-DevBank je portfolio demonstrátor zpracování žádostí o korporátní úvěry. Odděluje REST API a asynchronní processing worker, používá PostgreSQL, transactional outbox, Kafka, idempotentní zpracování a auditní stopu. Operátorské UI je v češtině.
+DevBank je platforma pro zpracování žádostí o korporátní úvěry. Odděluje REST API a asynchronní processing worker, používá PostgreSQL, transactional outbox, Kafka, idempotentní zpracování a auditní stopu. Operátorské UI je v češtině.
 
 > **Demo prostředí:** systém používá výhradně fiktivní data a neprovádí skutečný úvěrový scoring.
+
+Hlavní architektonická rozhodnutí:
+
+- Loan API a Processing Worker běží jako samostatné procesy se zřetelně oddělenými odpovědnostmi;
+- business stav, auditní záznam a outbox event vznikají v jedné databázové transakci;
+- Kafka doručuje události alespoň jednou a worker zajišťuje idempotentní zpracování;
+- optimistic locking chrání stavové přechody před souběžnou změnou;
+- automatizovaný smoke test ověřuje celý tok od REST požadavku až po změnu stavu workerem.
 
 ## Spuštění z čistého checkoutu
 
@@ -115,7 +123,7 @@ Compose načítá volitelné hodnoty z `.env`; úplný bezpečný příklad je v
 - `LOAN_PLATFORM_DEMO_DATA_ENABLED`;
 - frontendový `BACKEND_URL` pro Nginx reverse proxy.
 
-Hlavní konfigurace neobsahuje cloudové adresy ani credentials. `application-local.yml` izoluje lokální fallbacky a `application-prod.yml` zapíná strukturované logování, vypíná demo data a OpenAPI UI. Produkční secrets musí být dodány z runtime secret store; nejsou součástí image ani repozitáře.
+Hlavní konfigurace neobsahuje cloudové adresy ani přihlašovací údaje. `application-local.yml` izoluje lokální výchozí hodnoty a `application-prod.yml` zapíná strukturované logování, vypíná demo data a OpenAPI UI. Produkční secrets musí být dodány z runtime secret store; nejsou součástí image ani repozitáře.
 
 ## Kontroly kvality
 
@@ -132,7 +140,7 @@ npm test
 npm run build
 ```
 
-CI provádí backendové a frontendové testy, sestaví oba Docker image a spustí plný lokální event-flow smoke test. Workflow neobsahuje AWS credentials, deploy ani publikování image.
+CI provádí backendové a frontendové testy, sestaví oba Docker image a spustí plný lokální event-flow smoke test. Workflow neobsahuje AWS přihlašovací údaje, deployment ani publikování image.
 
 ## Architektura a spolehlivost
 
@@ -156,4 +164,8 @@ Podrobnosti jsou v [architektonické dokumentaci](docs/ARCHITECTURE.md) a v [pro
 
 ## Stav přípravy na AWS
 
-Repozitář zatím neobsahuje cloudový deployment a žádné AWS zdroje nevytváří. Aplikační kontejnery jsou připravené přijímat runtime konfiguraci vhodnou pro ECS/Fargate. Před reálným nasazením bude nutné samostatně navrhnout síť, image registry, databázi, Kafka-compatible službu, secret store, load balancer, logování, IAM a provozní limity.
+Repozitář zatím neobsahuje cloudový deployment a žádné AWS zdroje nevytváří. Aplikační kontejnery jsou připravené přijímat runtime konfiguraci vhodnou pro ECS/Fargate. Cílovou topologii, bezpečnostní model a řízený deployment popisují:
+
+- [AWS architektura](docs/aws-architecture.md);
+- [bezpečnostní model AWS](docs/aws-security.md);
+- [plán AWS deploymentu](docs/aws-deployment-plan.md).

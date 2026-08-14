@@ -31,9 +31,9 @@ export function ApplicationsPage() {
         <div><p className="eyebrow">Úvěrové operace</p><h1>Přehled žádostí</h1><p>Správa firemních úvěrů od podání po rozhodnutí.</p></div>
         <Link className="button primary" to="/applications/new"><Plus size={18} /> Nová žádost</Link>
       </div>
-      <section className="summary-strip" aria-label="Souhrn portfolia">
+      <section className="summary-strip" aria-label="Souhrn žádostí">
         <div><span>Celkem ve výběru</span><strong>{result.data?.totalElements ?? '—'}</strong></div>
-        <div className="summary-note"><i /><span><strong>Aktuální data</strong><small>Automatická synchronizace API</small></span></div>
+        <div className="summary-note"><i /><span><strong>Aktuální data</strong><small>Průběžně obnovováno</small></span></div>
       </section>
       <section className="panel list-panel">
         <div className="toolbar">

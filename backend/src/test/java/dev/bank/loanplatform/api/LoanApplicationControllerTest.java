@@ -86,7 +86,7 @@ class LoanApplicationControllerTest {
 
     @Test
     void propagatesCorrelationIdToResponseProblemAndOutbox() throws Exception {
-        var correlationId = "portfolio-demo-42";
+        var correlationId = "request-test-42";
         var response = create("api-correlation-001", validRequest(), correlationId);
 
         assertThat(response.statusCode()).isEqualTo(201);

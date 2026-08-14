@@ -1,6 +1,6 @@
 # Lokální infrastruktura
 
-Docker Compose spouští PostgreSQL, jednouzlový Kafka broker, Loan API, Processing Worker a frontend. Je to vývojové demo, nikoli produkční topologie.
+Docker Compose spouští PostgreSQL, jednouzlový Kafka broker, Loan API, Processing Worker a frontend. Topologie je určená pro lokální vývoj a ukázkové prostředí; produkční varianta je popsána v AWS dokumentaci.
 
 ```powershell
 docker compose up --build

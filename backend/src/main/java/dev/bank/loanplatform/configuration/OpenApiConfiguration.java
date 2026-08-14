@@ -9,6 +9,6 @@ import org.springframework.context.annotation.Configuration;
 @OpenAPIDefinition(info = @Info(
         title = "DevBank API",
         version = "v1",
-        description = "Demo platforma pro zpracování žádostí o korporátní úvěry"))
+        description = "API ukázkového prostředí pro zpracování žádostí o korporátní úvěry"))
 public class OpenApiConfiguration {
 }

@@ -2,7 +2,7 @@
 
 ## Účel
 
-DevBank je profesionální portfolio demonstrátor platformy pro zpracování korporátních úvěrů. Neobsahuje reálná klientská data, proprietární zdrojový kód ani identitu skutečné banky. Nejde o skutečný úvěrový scoring.
+DevBank je ukázková platforma pro zpracování žádostí o korporátní úvěry. Pracuje výhradně s fiktivními daty, není spojena s žádnou skutečnou bankou a neprovádí skutečný úvěrový scoring.
 
 ## Produktová identita
 
@@ -28,7 +28,7 @@ Stavový model: `SUBMITTED -> UNDER_REVIEW -> APPROVED | REJECTED`.
 
 Worker vlastní přechod do `UNDER_REVIEW`. Operátor smí rozhodnout pouze o žádosti ve stavu `UNDER_REVIEW`. Schválení i zamítnutí musí potvrdit v dialogu; zamítnutí vyžaduje důvod. Každá akce zobrazí jednoznačný výsledek a zachová idempotentní chování.
 
-## Obsah a prezentace
+## Obsah a uživatelské rozhraní
 
 - používat pouze realistická fiktivní firemní data;
 - nepoužívat jména politiků, skutečných osob, testovací názvy ani nesmyslné částky;
@@ -57,7 +57,7 @@ Procesy mohou sdílet repozitář, artefakt i PostgreSQL, ale jsou logicky oddě
 
 ## Spolehlivost a audit
 
-Projekt prokazuje transakční hranice, optimistic locking, HTTP idempotenci, transactional outbox, doručení alespoň jednou, deduplikaci eventů, retry/DLT chování a dohledatelnost přes `requestId`, `applicationId` a `eventId`. Netvrdí exactly-once zpracování.
+Řešení používá transakční hranice, optimistic locking, HTTP idempotenci, transactional outbox, doručení alespoň jednou, deduplikaci eventů, retry/DLT chování a dohledatelnost přes `requestId`, `applicationId` a `eventId`. Garantuje idempotentní zpracování, nikoli přesně jedno fyzické doručení události.
 
 Povinné testy pokrývají duplicitní HTTP request, duplicitní Kafka event, neplatný přechod, optimistic locking konflikt, pád před potvrzením publikace a souběžný start více seederů bez duplicit.
 
@@ -67,7 +67,7 @@ Při lokálním spuštění se databáze doplní malou deterministickou sadou v�
 
 ## Technologická hranice
 
-Základ tvoří Java 21, Spring Boot, Maven, PostgreSQL, Flyway, jOOQ, Kafka-compatible broker, JUnit 5, Testcontainers, React, TypeScript, Vite, Docker a Docker Compose. Další technologie se nepřidávají bez konkrétního důvodu. AWS není součástí tohoto rozsahu.
+Základ tvoří Java 21, Spring Boot, Maven, PostgreSQL, Flyway, jOOQ, Kafka-compatible broker, JUnit 5, Testcontainers, React, TypeScript, Vite, Docker a Docker Compose. Další technologie se přidávají pouze s konkrétním provozním nebo produktovým přínosem. Cílový model AWS deploymentu je popsán odděleně od lokálního běhového prostředí.
 
 Lokální tok musí být funkční a otestovaný: `API -> PostgreSQL -> outbox -> Kafka -> worker -> změna stavu`.
 

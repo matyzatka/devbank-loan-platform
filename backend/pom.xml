@@ -15,7 +15,7 @@
     <artifactId>loan-platform-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>loan-platform-backend</name>
-    <description>Corporate loan application processing demonstrator</description>
+    <description>Corporate loan application processing platform</description>
 
     <properties>
         <java.version>21</java.version>
