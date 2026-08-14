@@ -1,0 +1,13 @@
+.idea/
+.vscode/
+*.iml
+backend/target/
+**/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+.env
+*.log
+.m2/

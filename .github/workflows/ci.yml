@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: loan-platform-demo/backend
+        working-directory: backend
 
     steps:
       - name: Checkout repository
@@ -32,7 +32,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-          cache-dependency-path: loan-platform-demo/backend/pom.xml
+          cache-dependency-path: backend/pom.xml
 
       - name: Compile and test backend
         run: mvn --batch-mode --no-transfer-progress verify
@@ -41,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: backend-jar-${{ github.sha }}
-          path: loan-platform-demo/backend/target/loan-platform-backend-*.jar
+          path: backend/target/loan-platform-backend-*.jar
           if-no-files-found: error
           retention-days: 1
 
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: loan-platform-demo/frontend
+        working-directory: frontend
 
     steps:
       - name: Checkout repository
@@ -61,7 +61,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: loan-platform-demo/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install locked frontend dependencies
         run: npm ci
@@ -90,10 +90,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: backend-jar-${{ github.sha }}
-          path: loan-platform-demo/backend/target
+          path: backend/target
 
       - name: Build backend image
-        run: docker build --tag "devbank-backend:${GITHUB_SHA}" loan-platform-demo/backend
+        run: docker build --tag "devbank-backend:${GITHUB_SHA}" backend
 
       - name: Build frontend image
-        run: docker build --tag "devbank-frontend:${GITHUB_SHA}" loan-platform-demo/frontend
+        run: docker build --tag "devbank-frontend:${GITHUB_SHA}" frontend
