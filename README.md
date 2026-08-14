@@ -5,66 +5,124 @@
 [![React](https://img.shields.io/badge/React-TypeScript-149ECA)](frontend/package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-DevBank je profesionální portfolio demonstrátor zpracování žádostí o korporátní úvěry. Ukazuje oddělené API a asynchronní processing worker, spolehlivé publikování business událostí, idempotenci, auditní stopu a české operátorské UI.
+DevBank je portfolio demonstrátor zpracování žádostí o korporátní úvěry. Odděluje REST API a asynchronní processing worker, používá PostgreSQL, transactional outbox, Kafka, idempotentní zpracování a auditní stopu. Operátorské UI je v češtině.
 
 > **Demo prostředí:** systém používá výhradně fiktivní data a neprovádí skutečný úvěrový scoring.
 
-## Co projekt prokazuje
+## Spuštění z čistého checkoutu
 
-- explicitní workflow `SUBMITTED → UNDER_REVIEW → APPROVED | REJECTED`;
-- Loan API a Processing Worker jako samostatné procesy;
-- PostgreSQL, Flyway a jOOQ;
-- transactional outbox a Kafka doručení alespoň jednou;
-- deduplikaci eventů a idempotentní HTTP commandy;
-- optimistic locking a odmítnutí neplatných přechodů;
-- audit s `requestId`, `applicationId`, `eventId` a důvodem zamítnutí;
-- deterministická demo data bezpečná při startu více instancí;
-- React, TypeScript, TanStack Query, React Hook Form a Zod;
-- automatické backendové, frontendové a Docker kontroly v GitHub Actions.
-
-## Architektura
-
-```mermaid
-flowchart LR
-    UI["React UI"] -->|REST command/query| API["Loan API"]
-    API -->|stav + audit + outbox v jedné transakci| DB[(PostgreSQL)]
-    API -->|publikace outboxu| K[Kafka]
-    K -->|LoanApplicationSubmitted| W["Processing Worker"]
-    W -->|deduplikace + předběžná kontrola + UNDER_REVIEW| DB
-```
-
-API přijímá commandy a vlastní hlavní stav žádosti. Worker samostatně konzumuje `LoanApplicationSubmitted`, provádí předběžnou validační a procesní kontrolu a posouvá žádost do ručního posouzení. Podrobnosti a transakční hranice popisuje [architektonická dokumentace](docs/ARCHITECTURE.md).
-
-## Rychlé spuštění
-
-Požadavky: Docker Desktop a Docker Compose.
+Jediným požadavkem je běžící Docker Desktop s Docker Compose. Lokální hodnoty lze volitelně změnit zkopírováním ukázkové konfigurace; žádný skutečný `.env` se do Gitu neukládá.
 
 ```powershell
+git clone https://github.com/matyzatka/devbank-loan-platform.git
+cd devbank-loan-platform
+Copy-Item .env.example .env   # volitelné; Compose má bezpečné lokální výchozí hodnoty
 docker compose up --build
 ```
 
-Po startu jsou dostupné:
+Na Linuxu nebo macOS použijte místo `Copy-Item` příkaz `cp .env.example .env`.
+
+Po dokončení healthchecků jsou dostupné:
 
 - UI: http://localhost:3000/applications
 - OpenAPI: http://localhost:8080/swagger-ui.html
 - readiness: http://localhost:8080/actuator/health/readiness
 
-Zastavení lokálního stacku:
+Stack obsahuje pět služeb:
+
+| Služba | Úloha | Lokální port |
+|---|---|---:|
+| `frontend` | React UI servírované přes Nginx | `3000` |
+| `loan-api` | REST API, stav žádosti a outbox publisher | `8080` |
+| `processing-worker` | Kafka consumer a předběžná kontrola | pouze interní |
+| `postgres` | stav, outbox, audit a deduplikační záznamy | `5432` |
+| `kafka` | doručení business událostí | `9092` |
+
+Zastavení zachová databázová data:
 
 ```powershell
 docker compose down
 ```
 
-## Vývojářské ověření
+Úplný reset lokálních dat:
 
-Backend:
+```powershell
+docker compose down --volumes
+```
+
+## Automatizovaný smoke test
+
+Smoke test sestaví a spustí celý stack, ověří frontend a readiness API, založí žádost přes REST a čeká na tok PostgreSQL → outbox → Kafka → worker → `UNDER_REVIEW`. Nakonec ověří auditní `requestId` a `eventId`.
+
+```powershell
+./scripts/smoke-test.ps1 -Build
+```
+
+Pro jednorázový CI běh včetně odstranění kontejnerů a volumes:
+
+```powershell
+./scripts/smoke-test.ps1 -Build -Cleanup
+```
+
+## Samostatný lokální vývoj
+
+Nejprve lze spustit jen infrastrukturu:
+
+```powershell
+docker compose up -d postgres kafka
+```
+
+Backend API používá lokální profil, který jako jediný obsahuje `localhost` fallbacky:
 
 ```powershell
 cd backend
-mvn verify
+$env:SPRING_PROFILES_ACTIVE="local"
+$env:LOAN_PLATFORM_API_ENABLED="true"
+$env:LOAN_PLATFORM_WORKER_ENABLED="false"
+$env:LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED="true"
+mvn spring-boot:run
 ```
 
-Frontend:
+Worker se spouští jako druhý proces:
+
+```powershell
+cd backend
+$env:SPRING_PROFILES_ACTIVE="local"
+$env:SPRING_MAIN_WEB_APPLICATION_TYPE="none"
+$env:LOAN_PLATFORM_API_ENABLED="false"
+$env:LOAN_PLATFORM_WORKER_ENABLED="true"
+$env:LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED="false"
+mvn spring-boot:run
+```
+
+Frontendový Vite proxy cíl lze změnit přes `VITE_BACKEND_URL`:
+
+```powershell
+cd frontend
+$env:VITE_BACKEND_URL="http://localhost:8080"
+npm ci
+npm run dev
+```
+
+## Runtime konfigurace
+
+Compose načítá volitelné hodnoty z `.env`; úplný bezpečný příklad je v [.env.example](.env.example). Pro budoucí kontejnerové prostředí jsou podstatné zejména:
+
+- `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`;
+- `SPRING_KAFKA_BOOTSTRAP_SERVERS`, `SPRING_KAFKA_CONSUMER_GROUP_ID`;
+- `KAFKA_TOPIC` a `SERVER_PORT`;
+- `LOAN_PLATFORM_API_ENABLED`, `LOAN_PLATFORM_WORKER_ENABLED`, `LOAN_PLATFORM_OUTBOX_PUBLISHER_ENABLED`;
+- `LOAN_PLATFORM_DEMO_DATA_ENABLED`;
+- frontendový `BACKEND_URL` pro Nginx reverse proxy.
+
+Hlavní konfigurace neobsahuje cloudové adresy ani credentials. `application-local.yml` izoluje lokální fallbacky a `application-prod.yml` zapíná strukturované logování, vypíná demo data a OpenAPI UI. Produkční secrets musí být dodány z runtime secret store; nejsou součástí image ani repozitáře.
+
+## Kontroly kvality
+
+```powershell
+cd backend
+mvn test
+```
 
 ```powershell
 cd frontend
@@ -74,24 +132,28 @@ npm test
 npm run build
 ```
 
-CI provádí stejné kontroly na GitHub-hosted runneru a navíc sestaví oba existující Docker images označené commit SHA. Image se nikam nepublikují.
+CI provádí backendové a frontendové testy, sestaví oba Docker image a spustí plný lokální event-flow smoke test. Workflow neobsahuje AWS credentials, deploy ani publikování image.
 
-## Struktura repozitáře
+## Architektura a spolehlivost
 
-```text
-backend/              Java 21, Spring Boot, doména, API, worker a migrace
-frontend/             React a TypeScript operátorské UI
-docs/                 architektonická dokumentace
-infra/                poznámky k lokální infrastruktuře
-.github/workflows/    CI pipeline
-docker-compose.yml    kompletní lokální prostředí
-brief.md              produktová a architektonická akceptační kritéria
+```mermaid
+flowchart LR
+    UI["React UI"] -->|REST| API["Loan API"]
+    API -->|stav + audit + outbox v jedné transakci| DB[(PostgreSQL)]
+    API -->|publikace outboxu| K[Kafka]
+    K -->|LoanApplicationSubmitted| W["Processing Worker"]
+    W -->|deduplikace + kontrola + UNDER_REVIEW| DB
 ```
 
-## Dokumentace a omezení
+- workflow `SUBMITTED → UNDER_REVIEW → APPROVED | REJECTED`;
+- Flyway reprodukovatelně inicializuje databázové schéma;
+- HTTP commandy a Kafka consumer jsou idempotentní;
+- optimistic locking chrání souběžné změny;
+- logovací kontext obsahuje `requestId`, `applicationId` a `eventId` bez celých business payloadů;
+- deterministický seeder je bezpečný při startu více instancí.
 
-- [Produktový a architektonický brief](brief.md)
-- [Architektura a zpracování událostí](docs/ARCHITECTURE.md)
-- [Lokální infrastruktura](infra/README.md)
+Podrobnosti jsou v [architektonické dokumentaci](docs/ARCHITECTURE.md) a v [produktovém briefu](brief.md).
 
-Autentizace, skutečný scoring, cloudový deployment a AWS služby nejsou součástí aktuálního rozsahu. Projekt je dostupný pod [MIT licencí](LICENSE).
+## Stav přípravy na AWS
+
+Repozitář zatím neobsahuje cloudový deployment a žádné AWS zdroje nevytváří. Aplikační kontejnery jsou připravené přijímat runtime konfiguraci vhodnou pro ECS/Fargate. Před reálným nasazením bude nutné samostatně navrhnout síť, image registry, databázi, Kafka-compatible službu, secret store, load balancer, logování, IAM a provozní limity.

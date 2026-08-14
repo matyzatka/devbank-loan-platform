@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/actuator': 'http://localhost:8080',
+      '/api': process.env.VITE_BACKEND_URL ?? 'http://localhost:8080',
+      '/actuator': process.env.VITE_BACKEND_URL ?? 'http://localhost:8080',
     },
   },
   test: {

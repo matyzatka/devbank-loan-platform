@@ -3,10 +3,6 @@ spring:
     timeout-per-shutdown-phase: 20s
   application:
     name: loan-platform-backend
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/loan_platform}
-    username: ${DB_USERNAME:loan_platform}
-    password: ${DB_PASSWORD:loan_platform}
   jooq:
     sql-dialect: postgres
   flyway:
@@ -15,7 +11,6 @@ spring:
     problemdetails:
       enabled: true
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -23,7 +18,7 @@ spring:
       properties:
         enable.idempotence: true
     consumer:
-      group-id: loan-platform-audit
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:loan-platform-processing}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
@@ -41,7 +36,7 @@ loan-platform:
   kafka:
     enabled: true
   events:
-    topic: loan-application-events
+    topic: ${KAFKA_TOPIC:loan-application-events}
   outbox:
     publisher-enabled: true
     fixed-delay: 1000
@@ -63,6 +58,7 @@ management:
         enabled: true
 
 server:
+  port: ${SERVER_PORT:8080}
   shutdown: graceful
 
 logging:
