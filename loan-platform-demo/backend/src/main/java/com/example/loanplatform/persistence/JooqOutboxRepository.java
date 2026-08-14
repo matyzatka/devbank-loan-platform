@@ -23,6 +23,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** PostgreSQL implementation of the transactional outbox and publisher work queue. */
 @Repository
 public class JooqOutboxRepository implements OutboxRepository {
 
@@ -64,6 +65,7 @@ public class JooqOutboxRepository implements OutboxRepository {
 
     @Override
     public List<PendingOutboxEvent> lockUnpublished(int batchSize) {
+        // SKIP LOCKED lets multiple publisher instances share work without blocking one another.
         return dsl.select(ID, AGGREGATE_ID, EVENT_TYPE, PAYLOAD, OCCURRED_AT, REQUEST_ID, PUBLISH_ATTEMPTS)
                 .from(OUTBOX)
                 .where(PUBLISHED_AT.isNull())
@@ -125,6 +127,7 @@ public class JooqOutboxRepository implements OutboxRepository {
         }
     }
 
+    /** Stable metadata envelope around event-specific payload fields. */
     private record EventEnvelope(
             UUID eventId,
             UUID applicationId,

@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
 
+/** Supplies an injectable UTC clock so time-dependent rules remain deterministic in tests. */
 @Configuration(proxyBeanMethods = false)
 public class TimeConfiguration {
 
@@ -13,4 +14,3 @@ public class TimeConfiguration {
         return Clock.systemUTC();
     }
 }
-

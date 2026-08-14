@@ -9,6 +9,11 @@ import java.util.Currency;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Aggregate root for the loan-application lifecycle.
+ * Construction is controlled so persisted data is validated on restore and every mutation passes
+ * through the explicit state machine while incrementing the optimistic-lock version.
+ */
 @Getter
 public final class LoanApplication {
 
@@ -57,6 +62,7 @@ public final class LoanApplication {
             long version,
             Instant createdAt,
             Instant updatedAt) {
+        // Restoration validates persistence data without replaying transitions or changing timestamps.
         var application = new LoanApplication(id, customerId, amount, currency, createdAt);
         application.status = Objects.requireNonNull(status, "status must not be null");
         if (version < 0) {
@@ -88,6 +94,7 @@ public final class LoanApplication {
             throw new InvalidLoanApplicationTransitionException(status, targetStatus);
         }
 
+        // Version is part of the aggregate contract and is persisted with a compare-and-set update.
         status = targetStatus;
         version++;
         updatedAt = clock.instant();

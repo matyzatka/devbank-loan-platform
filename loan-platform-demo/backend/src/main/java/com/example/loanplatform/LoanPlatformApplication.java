@@ -3,6 +3,7 @@ package com.example.loanplatform;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+/** Shared executable artifact configured at runtime as either Loan API or processing worker. */
 @SpringBootApplication
 public class LoanPlatformApplication {
 

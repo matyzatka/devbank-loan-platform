@@ -1,3 +1,4 @@
+/** Wire contracts intentionally mirror the versioned public API rather than backend implementation types. */
 export type ApplicationStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
 
 export interface LoanApplication {

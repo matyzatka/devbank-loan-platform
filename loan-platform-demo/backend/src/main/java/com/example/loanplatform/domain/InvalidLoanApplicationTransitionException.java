@@ -1,5 +1,6 @@
 package com.example.loanplatform.domain;
 
+/** Domain failure carrying both states so API adapters can return a structured conflict. */
 public final class InvalidLoanApplicationTransitionException extends RuntimeException {
 
     private final LoanApplicationStatus currentStatus;

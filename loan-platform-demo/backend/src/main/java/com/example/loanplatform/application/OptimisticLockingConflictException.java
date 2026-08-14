@@ -2,6 +2,7 @@ package com.example.loanplatform.application;
 
 import java.util.UUID;
 
+/** Signals that another transaction changed the aggregate after it was read. */
 public final class OptimisticLockingConflictException extends RuntimeException {
 
     public OptimisticLockingConflictException(UUID applicationId, long expectedVersion) {

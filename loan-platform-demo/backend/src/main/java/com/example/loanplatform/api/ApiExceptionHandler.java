@@ -22,6 +22,7 @@ import java.util.Map;
 import org.slf4j.MDC;
 import com.example.loanplatform.configuration.CorrelationIds;
 
+/** Maps domain and application failures to stable RFC 9457 responses without exposing internals. */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 

@@ -1,6 +1,7 @@
 import { Bell, ChevronDown, Landmark, LogOut, Menu, Search } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
+/** Persistent operations workspace shared by all loan-management routes. */
 export function AppShell() {
   const navigate = useNavigate()
   return (

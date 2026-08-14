@@ -19,6 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.UUID;
 
+/**
+ * Asynchronous process boundary for preliminary validation of submitted applications.
+ * The component is enabled only in the worker runtime, preventing the REST process from consuming
+ * events it produced. Processing is idempotent and all business side effects commit together.
+ */
 @Component
 @Slf4j
 @ConditionalOnProperty(name = "loan-platform.worker.enabled", havingValue = "true")
@@ -45,6 +50,10 @@ public class LoanProcessingWorker {
         this.clock = clock;
     }
 
+    /**
+     * Dispatches supported envelope types and establishes per-event diagnostic context.
+     * Unknown event types intentionally remain no-ops because the shared topic also carries status events.
+     */
     @KafkaListener(topics = "${loan-platform.events.topic}")
     @Transactional
     public void consume(ConsumerRecord<String, String> record) {
@@ -69,6 +78,7 @@ public class LoanProcessingWorker {
             UUID eventId,
             UUID applicationId,
             String requestId) {
+        // The unique insert is part of this transaction; rollback makes a failed delivery retryable.
         if (!processedEvents.claim(eventId, clock.instant())) {
             log.debug("Duplicate event skipped safely");
             return;
@@ -111,6 +121,7 @@ public class LoanProcessingWorker {
 
     private static String requestId(ConsumerRecord<String, String> record, UUID eventId) {
         var header = record.headers().lastHeader(CorrelationIds.HEADER);
+        // Event ID is a deterministic fallback for producers that do not propagate request context.
         return header == null
                 ? eventId.toString()
                 : new String(header.value(), StandardCharsets.UTF_8);

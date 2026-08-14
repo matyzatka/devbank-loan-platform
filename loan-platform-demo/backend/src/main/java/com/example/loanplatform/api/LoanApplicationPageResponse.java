@@ -4,6 +4,7 @@ import com.example.loanplatform.application.LoanApplicationPage;
 
 import java.util.List;
 
+/** Stable pagination envelope for the operations queue. */
 public record LoanApplicationPageResponse(
         List<LoanApplicationResponse> items,
         int page,

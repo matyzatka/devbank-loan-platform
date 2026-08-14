@@ -13,6 +13,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Establishes a safe request identifier before controller execution and returns it to callers.
+ * MDC cleanup is guaranteed by try-with-resources, preventing context leakage across servlet threads.
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationIdFilter extends OncePerRequestFilter {

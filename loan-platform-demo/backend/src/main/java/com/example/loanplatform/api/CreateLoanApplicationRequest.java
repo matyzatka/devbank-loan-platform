@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
+/** Validated wire contract for creating a corporate loan application. */
 public record CreateLoanApplicationRequest(
         @NotBlank
         @Size(max = 100)

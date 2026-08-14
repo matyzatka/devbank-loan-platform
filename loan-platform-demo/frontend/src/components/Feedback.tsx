@@ -1,5 +1,6 @@
 import { AlertCircle, FileSearch, LoaderCircle } from 'lucide-react'
 
+/** Consistent asynchronous states keep layout and recovery behaviour predictable across features. */
 export function LoadingState({ label = 'Načítám data…' }: { label?: string }) {
   return <div className="feedback"><LoaderCircle className="spin" /><strong>{label}</strong><span>Chvilku strpení.</span></div>
 }

@@ -25,6 +25,10 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.util.Currency;
 import java.util.UUID;
 
+/**
+ * HTTP adapter for operator-facing loan commands and queries.
+ * It is absent from the worker runtime, preserving the intended process boundary in one artifact.
+ */
 @RestController
 @RequestMapping("/api/v1/applications")
 @Slf4j

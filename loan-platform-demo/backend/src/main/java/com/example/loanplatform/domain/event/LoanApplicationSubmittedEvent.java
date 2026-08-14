@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Signals that committed application state is ready for preliminary asynchronous processing. */
 public record LoanApplicationSubmittedEvent(
         UUID eventId,
         UUID applicationId,
@@ -17,4 +18,3 @@ public record LoanApplicationSubmittedEvent(
         return "LoanApplicationSubmitted";
     }
 }
-

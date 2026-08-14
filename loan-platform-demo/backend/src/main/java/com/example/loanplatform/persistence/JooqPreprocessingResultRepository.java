@@ -16,6 +16,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** Persists one durable worker outcome per submitted event. */
 @Repository
 public class JooqPreprocessingResultRepository implements PreprocessingResultRepository {
 

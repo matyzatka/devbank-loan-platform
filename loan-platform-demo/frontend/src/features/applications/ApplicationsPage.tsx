@@ -14,11 +14,13 @@ const statuses: Array<{ value: '' | ApplicationStatus; label: string }> = [
   { value: 'REJECTED', label: 'Zamítnuté' },
 ]
 
+/** Server-backed operations queue with local filters and bounded pagination. */
 export function ApplicationsPage() {
   const navigate = useNavigate()
   const [page, setPage] = useState(0)
   const [status, setStatus] = useState<'' | ApplicationStatus>('')
   const [query, setQuery] = useState('')
+  // Deferring search keeps typing responsive and naturally coalesces cache requests.
   const deferredQuery = useDeferredValue(query)
   const filters = { page, size: 10, status: status || undefined, query: deferredQuery || undefined }
   const result = useQuery({ queryKey: applicationKeys.list(filters), queryFn: () => listApplications(filters) })

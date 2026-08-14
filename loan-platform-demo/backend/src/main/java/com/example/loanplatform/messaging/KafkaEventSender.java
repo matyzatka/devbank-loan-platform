@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 
+/** Kafka transport adapter; application ID is the key to preserve per-aggregate ordering. */
 @Component
 @ConditionalOnProperty(
         name = "loan-platform.kafka.enabled",
@@ -29,6 +30,7 @@ public class KafkaEventSender implements EventSender {
         record.headers().add(
                 CorrelationIds.HEADER,
                 event.requestId().getBytes(StandardCharsets.UTF_8));
+        // Blocking for acknowledgement keeps success inside the outbox transaction's decision.
         kafkaTemplate.send(record).join();
     }
 }

@@ -2,6 +2,7 @@ package com.example.loanplatform.application;
 
 import java.util.UUID;
 
+/** Use-case failure raised when an application ID has no persisted aggregate. */
 public final class LoanApplicationNotFoundException extends RuntimeException {
 
     public LoanApplicationNotFoundException(UUID applicationId) {

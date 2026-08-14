@@ -4,6 +4,7 @@ import { ApplicationDetailPage } from './features/applications/ApplicationDetail
 import { ApplicationsPage } from './features/applications/ApplicationsPage'
 import { NewApplicationPage } from './features/applications/NewApplicationPage'
 
+/** Declarative route boundary; feature pages own data loading while the shell owns persistent chrome. */
 export function App() {
   return (
     <Routes>

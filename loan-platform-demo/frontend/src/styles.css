@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 
+/* Design tokens centralize the banking-inspired palette and shared surface semantics. */
 :root { font-family: 'DM Sans', Arial, sans-serif; color: #171717; background: #f2f2f0; font-synthesis: none; --yellow: #ffe500; --yellow-dark: #e5ce00; --ink: #151515; --muted: #686868; --line: #deded9; --surface: #fff; --soft: #f7f7f5; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #f2f2f0; }
@@ -12,6 +13,7 @@ h1, h2, h3, p { margin-top: 0; }
 h1, h2, .brand strong { font-family: 'Manrope', Arial, sans-serif; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
+/* Application chrome and primary navigation. */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 .topbar { height: 74px; padding: 0 max(28px, calc((100vw - 1380px)/2)); background: #fff; display: flex; align-items: center; border-bottom: 1px solid #e8e8e5; }
 .brand { border: 0; background: transparent; display: flex; gap: 11px; align-items: center; padding: 0; min-width: 265px; text-align: left; }
@@ -44,6 +46,7 @@ h1, h2, .brand strong { font-family: 'Manrope', Arial, sans-serif; }
 .button { min-height: 44px; padding: 0 20px; border: 1px solid transparent; display: inline-flex; justify-content: center; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; transition: background .15s, border .15s, transform .15s; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }.button.primary { background: var(--yellow); color: #151515; border-color: var(--yellow); box-shadow: 3px 3px 0 #1b1b1b; }.button.primary:hover { background: #ffed3c; }
 .button.secondary { background: #fff; border-color: #cfcfca; }.button.secondary:hover { border-color: #777; }.button.danger { background: #fff; border-color: #d8b4b0; color: #9d2b22; }.button.wide { width: 100%; }
+/* Queue, filtering, and shared feedback states. */
 .summary-strip { background: #fff; border: 1px solid var(--line); display: grid; grid-template-columns: 190px 190px 1fr; min-height: 80px; margin-bottom: 16px; }
 .summary-strip > div { padding: 17px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }.summary-strip span { color: #777; font-size: 11px; }.summary-strip strong { font-family: 'Manrope'; font-size: 22px; margin-top: 4px; }
 .summary-strip .summary-note { border: 0; flex-direction: row; justify-content: flex-end; align-items: center; gap: 12px; }.summary-note i { width: 9px; height: 9px; border-radius: 50%; background: #48a868; box-shadow: 0 0 0 5px #e0efe4; }.summary-note span { display: flex; flex-direction: column; }.summary-note strong { font-family: inherit; font-size: 12px; margin: 0; color: #333; }.summary-note small { margin-top: 3px; color: #888; }

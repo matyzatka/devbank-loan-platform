@@ -14,6 +14,7 @@ import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.util.backoff.FixedBackOff;
 
+/** Kafka topics and retry/dead-letter policy shared by publisher and worker runtimes. */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(

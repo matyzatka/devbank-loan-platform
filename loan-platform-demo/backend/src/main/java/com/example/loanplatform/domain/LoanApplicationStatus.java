@@ -3,6 +3,7 @@ package com.example.loanplatform.domain;
 import java.util.EnumSet;
 import java.util.Set;
 
+/** Closed states expose no outgoing transition, making terminality explicit in the model. */
 public enum LoanApplicationStatus {
     SUBMITTED,
     UNDER_REVIEW,
@@ -21,4 +22,3 @@ public enum LoanApplicationStatus {
         return target != null && allowedTargets().contains(target);
     }
 }
-

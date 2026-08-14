@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { ApiError } from '../../api/client'
 import { applicationKeys, createApplication } from './api'
 
+// Client validation improves feedback; the backend remains the authoritative boundary.
 const schema = z.object({
   customerId: z.string().trim().min(1, 'Zadejte identifikátor klienta.').max(100),
   amount: z.number({ error: 'Zadejte požadovanou částku.' }).positive('Částka musí být vyšší než nula.').max(Number.MAX_SAFE_INTEGER),
@@ -14,6 +15,7 @@ const schema = z.object({
 })
 type FormValues = z.infer<typeof schema>
 
+/** Creation command screen with schema-driven form state and explicit cache invalidation. */
 export function NewApplicationPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()

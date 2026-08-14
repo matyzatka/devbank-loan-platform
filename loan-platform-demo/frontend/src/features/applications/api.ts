@@ -1,6 +1,7 @@
 import { apiRequest } from '../../api/client'
 import type { ApplicationPage, ApplicationStatus, CreateApplicationInput, LoanApplication } from '../../api/types'
 
+/** Hierarchical keys make list-wide invalidation possible without coupling pages to cache internals. */
 export const applicationKeys = {
   all: ['applications'] as const,
   list: (filters: ListFilters) => [...applicationKeys.all, 'list', filters] as const,
@@ -26,6 +27,7 @@ export function getApplication(id: string) {
 }
 
 export function createApplication(input: CreateApplicationInput) {
+  // A new key belongs to one user submission; TanStack retries of this request remain safe server-side.
   return apiRequest<LoanApplication>('/api/v1/applications', {
     method: 'POST',
     headers: { 'Idempotency-Key': crypto.randomUUID() },

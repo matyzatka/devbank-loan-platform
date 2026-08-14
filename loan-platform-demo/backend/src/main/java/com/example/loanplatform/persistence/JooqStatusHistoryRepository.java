@@ -18,6 +18,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** Append-only jOOQ adapter for business state-transition history. */
 @Repository
 public class JooqStatusHistoryRepository implements StatusHistoryRepository {
 

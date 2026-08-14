@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Immutable API representation kept separate from the mutable domain aggregate. */
 public record LoanApplicationResponse(
         UUID id,
         String customerId,
@@ -29,4 +30,3 @@ public record LoanApplicationResponse(
                 application.getUpdatedAt());
     }
 }
-

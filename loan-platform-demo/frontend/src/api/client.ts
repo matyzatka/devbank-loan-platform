@@ -1,5 +1,6 @@
 import type { ApiProblem } from './types'
 
+/** Typed error that preserves the backend's RFC 9457 payload for contextual UI rendering. */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -10,6 +11,7 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  // Centralizing protocol concerns keeps feature modules focused on domain-specific endpoints.
   const response = await fetch(path, {
     ...init,
     headers: {
@@ -20,6 +22,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   })
 
   if (!response.ok) {
+    // Error bodies can be empty at proxy/network boundaries; callers still receive a stable error type.
     const problem = (await response.json().catch(() => ({}))) as ApiProblem
     throw new ApiError(response.status, problem)
   }

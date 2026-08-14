@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.List;
 import com.example.loanplatform.domain.LoanApplicationStatus;
 
+/** Persistence port for aggregate storage and optimistic compare-and-set updates. */
 public interface LoanApplicationRepository {
 
     void insert(LoanApplication application);

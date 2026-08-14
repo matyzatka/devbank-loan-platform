@@ -17,6 +17,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** PostgreSQL-backed idempotency adapter using insert-on-conflict as an atomic claim primitive. */
 @Repository
 public class JooqIdempotencyRepository implements IdempotencyRepository {
 
@@ -38,6 +39,7 @@ public class JooqIdempotencyRepository implements IdempotencyRepository {
             String requestHash,
             UUID proposedApplicationId,
             Instant createdAt) {
+        // ON CONFLICT avoids a check-then-insert race between concurrent retries.
         var inserted = dsl.insertInto(IDEMPOTENCY)
                 .columns(KEY, REQUEST_HASH, APPLICATION_ID, CREATED_AT)
                 .values(
@@ -64,4 +66,3 @@ public class JooqIdempotencyRepository implements IdempotencyRepository {
                         "Idempotency claim disappeared after a key conflict"));
     }
 }
-

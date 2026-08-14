@@ -16,6 +16,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+/**
+ * Coordinates loan-application use cases and defines their database transaction boundaries.
+ * Domain objects enforce legal transitions; this service makes each transition atomic with its
+ * audit record and outbox event so externally visible state can never outrun event delivery.
+ */
 @Service
 public class LoanApplicationService {
 
@@ -41,6 +46,10 @@ public class LoanApplicationService {
         this.clock = clock;
     }
 
+    /**
+     * Creates an application once for a stable idempotency key.
+     * Replays return the original aggregate, while reuse with different canonical input is rejected.
+     */
     @Transactional
     public LoanApplication create(CreateLoanApplicationCommand command) {
         Objects.requireNonNull(command, "command must not be null");
@@ -48,6 +57,7 @@ public class LoanApplicationService {
         var requestHash = requestHash(command);
         var proposedId = UUID.randomUUID();
         var now = clock.instant();
+        // The database claim is the concurrency boundary: only its winning transaction may create state.
         var claim = idempotency.claim(idempotencyKey, requestHash, proposedId, now);
 
         if (!claim.requestHash().equals(requestHash)) {
@@ -101,6 +111,7 @@ public class LoanApplicationService {
                 applications.count(status, normalizedQuery));
     }
 
+    /** Worker-only entry point; the submitted event is retained as the causal audit identifier. */
     @Transactional
     public LoanApplication startReviewFromWorker(
             UUID applicationId,
@@ -140,6 +151,7 @@ public class LoanApplicationService {
             StatusChangeSource source,
             String requestId,
             UUID causationEventId) {
+        // State, optimistic-lock update, audit history, and outbox append share this transaction.
         var application = get(applicationId);
         var previousStatus = application.getStatus();
         var expectedVersion = application.getVersion();
@@ -168,6 +180,7 @@ public class LoanApplicationService {
     }
 
     private static String requestHash(CreateLoanApplicationCommand command) {
+        // Canonical decimal formatting prevents semantically equal values (10 and 10.0) from conflicting.
         var canonicalRequest = "%s\n%s\n%s"
                 .formatted(
                         command.customerId(),

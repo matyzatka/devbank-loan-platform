@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Duration;
 
+/** Exposes backlog size and age, the primary health signals for an asynchronous outbox. */
 @Component
 public class OutboxMetrics implements MeterBinder {
 

@@ -25,6 +25,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** jOOQ adapter that maps relational rows to the domain aggregate without leaking SQL types upstream. */
 @Repository
 public class JooqLoanApplicationRepository implements LoanApplicationRepository {
 
@@ -62,6 +63,7 @@ public class JooqLoanApplicationRepository implements LoanApplicationRepository 
 
     @Override
     public void update(LoanApplication application, long expectedVersion) {
+        // Version in the predicate turns this into a database-level compare-and-set operation.
         var affectedRows = dsl.update(LOAN_APPLICATION)
                 .set(STATUS, application.getStatus().name())
                 .set(VERSION, application.getVersion())

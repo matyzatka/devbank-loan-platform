@@ -1,5 +1,6 @@
 import type { ApplicationStatus } from '../api/types'
 
+// Labels live beside the badge so every workflow view uses the same Czech domain vocabulary.
 // eslint-disable-next-line react-refresh/only-export-components
 export const statusLabels: Record<ApplicationStatus, string> = {
   SUBMITTED: 'Nová',

@@ -17,6 +17,7 @@ import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
 import static org.jooq.impl.DSL.table;
 
+/** PostgreSQL adapter for consumer deduplication and the immutable event-receipt log. */
 @Repository
 public class JooqProcessedEventRepository implements ProcessedEventRepository {
 
@@ -40,6 +41,7 @@ public class JooqProcessedEventRepository implements ProcessedEventRepository {
 
     @Override
     public boolean claim(UUID eventId, Instant processedAt) {
+        // A unique event_id converts duplicate deliveries into a deterministic no-op.
         return dsl.insertInto(PROCESSED)
                 .columns(PROCESSED_EVENT_ID, PROCESSED_AT)
                 .values(eventId, processedAt.atOffset(ZoneOffset.UTC))

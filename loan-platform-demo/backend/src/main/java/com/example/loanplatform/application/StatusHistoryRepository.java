@@ -5,6 +5,7 @@ import com.example.loanplatform.domain.LoanApplicationStatus;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Append-only audit port for recording who changed application state and what caused it. */
 public interface StatusHistoryRepository {
 
     void append(

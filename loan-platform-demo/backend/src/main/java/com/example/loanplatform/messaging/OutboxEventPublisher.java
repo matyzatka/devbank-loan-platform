@@ -13,6 +13,11 @@ import org.slf4j.MDC;
 
 import java.time.Clock;
 
+/**
+ * Polls committed outbox rows and delivers them to the configured event transport.
+ * Publication is deliberately at least once: a crash after broker acknowledgement but before
+ * {@code published_at} commits causes a safe duplicate that consumers must deduplicate.
+ */
 @Component
 @Slf4j
 @ConditionalOnProperty(
@@ -43,6 +48,7 @@ public class OutboxEventPublisher {
         this.batchSize = batchSize;
     }
 
+    /** Publishes one locked batch; row locking allows multiple publisher instances to share work safely. */
     @Scheduled(fixedDelayString = "${loan-platform.outbox.fixed-delay:1000}")
     @Transactional
     public void publishBatch() {
@@ -50,6 +56,7 @@ public class OutboxEventPublisher {
             try (var ignoredRequest = MDC.putCloseable("requestId", event.requestId());
                  var ignoredApplication = MDC.putCloseable("applicationId", event.aggregateId().toString());
                  var ignoredEvent = MDC.putCloseable("eventId", event.id().toString())) {
+                // Count the attempt before I/O so operational data also reflects failed sends.
                 outbox.recordPublishAttempt(event.id());
                 try {
                     eventSender.send(topic, event);

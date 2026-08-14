@@ -5,6 +5,7 @@ import com.example.loanplatform.domain.LoanApplicationStatus;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Immutable fact emitted after any successful application state transition. */
 public record LoanApplicationStatusChangedEvent(
         UUID eventId,
         UUID applicationId,
@@ -18,4 +19,3 @@ public record LoanApplicationStatusChangedEvent(
         return "LoanApplicationStatusChanged";
     }
 }
-
