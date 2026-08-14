@@ -1,11 +1,12 @@
 import { apiRequest } from '../../api/client'
-import type { ApplicationPage, ApplicationStatus, CreateApplicationInput, LoanApplication } from '../../api/types'
+import type { ApplicationPage, ApplicationProcessing, ApplicationStatus, CreateApplicationInput, LoanApplication } from '../../api/types'
 
 /** Hierarchical keys make list-wide invalidation possible without coupling pages to cache internals. */
 export const applicationKeys = {
   all: ['applications'] as const,
   list: (filters: ListFilters) => [...applicationKeys.all, 'list', filters] as const,
   detail: (id: string) => [...applicationKeys.all, 'detail', id] as const,
+  processing: (id: string) => [...applicationKeys.all, 'processing', id] as const,
 }
 
 export interface ListFilters {
@@ -24,6 +25,10 @@ export function listApplications(filters: ListFilters) {
 
 export function getApplication(id: string) {
   return apiRequest<LoanApplication>(`/api/v1/applications/${id}`)
+}
+
+export function getApplicationProcessing(id: string) {
+  return apiRequest<ApplicationProcessing>(`/api/v1/applications/${id}/processing`)
 }
 
 export function createApplication(input: CreateApplicationInput) {

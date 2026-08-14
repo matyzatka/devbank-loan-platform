@@ -34,6 +34,8 @@
 9. Loan API publishes that follow-up event. The worker ignores it because it handles submitted events only.
 10. A user can approve or reject the application through Loan API, supplying the aggregate version displayed by the UI.
 
+The detail screen retrieves operational evidence from `GET /api/v1/applications/{id}/processing`. The response combines the latest preliminary-processing result with the append-only state history. It is a read model only and cannot advance workflow state.
+
 ## Operator command concurrency
 
 Approval and rejection commands carry `expectedVersion`. Loan API compares it with the persisted aggregate before applying the transition, and the repository also includes that version in its SQL update predicate. A stale UI therefore receives `409 Conflict` instead of deciding state that changed after the operator loaded it. The two checks serve different purposes: the service provides an explicit command contract, while the database predicate closes the race between read and write.
@@ -53,6 +55,10 @@ Application state and outbox rows commit before asynchronous publication begins.
 ## Worker failure
 
 If processing fails before the database commit, the `processed_event` claim rolls back with all other worker writes. Kafka retries the record; after the configured attempts are exhausted, it is routed to `.DLT`.
+
+## Logging policy
+
+Application logs are signal-oriented. A committed state transition is logged once with `applicationId`, previous and new status, version, source, and related event ID. Worker completion and outbox publication failures remain separate operational signals. Expected reads, idempotent replays, duplicate events, and invalid request details use `DEBUG`; rejected business commands use `WARN`. MDC propagates `requestId`, `applicationId`, and `eventId`, while Kafka framework and client internals remain at `WARN` by default.
 
 ## Demonstrator boundary
 

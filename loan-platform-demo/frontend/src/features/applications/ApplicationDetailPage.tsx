@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Building2, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, Copy, FileCheck2, Info, XCircle } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, Copy, FileCheck2, Info, ShieldCheck, XCircle } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import type { LoanApplication } from '../../api/types'
+import type { ApplicationProcessing, LoanApplication } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/Feedback'
 import { StatusBadge, statusLabels } from '../../components/StatusBadge'
 import { formatDate, formatMoney, shortId } from '../../utils/format'
-import { applicationKeys, getApplication, transitionApplication } from './api'
+import { applicationKeys, getApplication, getApplicationProcessing, transitionApplication } from './api'
 
 /** Workflow-aware detail screen exposing only commands legal for the current server state. */
 export function ApplicationDetailPage() {
@@ -20,6 +20,13 @@ export function ApplicationDetailPage() {
     enabled: !!applicationId,
     // Poll only while worker processing can change state without a user action.
     refetchInterval: query => query.state.data?.status === 'SUBMITTED' ? 1_500 : false,
+  })
+  const processing = useQuery({
+    queryKey: applicationKeys.processing(applicationId),
+    queryFn: () => getApplicationProcessing(applicationId),
+    enabled: !!applicationId,
+    // Evidence is eventually consistent with the create response; stop polling once the worker result exists.
+    refetchInterval: query => query.state.data?.preprocessing ? false : 1_500,
   })
   const transition = useMutation({
     mutationFn: (action: 'approve' | 'reject') => transitionApplication(applicationId, action, result.data!.version),
@@ -39,10 +46,35 @@ export function ApplicationDetailPage() {
       <div className="detail-main">
         <section className="panel info-panel"><div className="panel-title"><h2>Parametry žádosti</h2><span>Verze {application.version}</span></div><div className="data-grid"><Data icon={<Building2 />} label="Firemní klient" value={application.customerId} /><Data icon={<CircleDollarSign />} label="Požadovaný objem" value={formatMoney(application.amount, application.currency)} /><Data icon={<CalendarDays />} label="Založeno" value={formatDate(application.createdAt, true)} /><Data icon={<Clock3 />} label="Poslední změna" value={formatDate(application.updatedAt, true)} /></div></section>
         <section className="panel timeline-panel"><div className="panel-title"><h2>Průběh zpracování</h2></div><Workflow application={application} /></section>
+        <ProcessingEvidence processing={processing.data} pending={processing.isPending} error={processing.isError} />
       </div>
       <aside className="panel action-panel"><h2>Další krok</h2><p>{actionCopy(application.status)}</p>{transition.isError && <div className="compact-error"><Info /><span>{transition.error.message}{errorProblem?.correlationId && <small>ID: {errorProblem.correlationId}</small>}</span></div>}<Actions application={application} pending={transition.isPending} onAction={action => transition.mutate(action)} /><div className="audit-note"><FileCheck2 /><span><strong>Auditovatelný workflow</strong><small>Změny jsou chráněné optimistic lockingem a publikované přes outbox.</small></span></div></aside>
     </div>
   </div>
+}
+
+/** Presents persisted operational evidence; identifiers remain visible for log and database correlation. */
+function ProcessingEvidence({ processing, pending, error }: { processing?: ApplicationProcessing; pending: boolean; error: boolean }) {
+  return <section className="panel evidence-panel">
+    <div className="panel-title"><h2>Audit a procesní kontrola</h2><span>{auditCountLabel(processing?.statusHistory.length ?? 0)}</span></div>
+    {pending ? <div className="evidence-message">Načítám auditní stopu…</div> : error ? <div className="evidence-message evidence-error">Auditní stopu se nepodařilo načíst.</div> : <>
+      <div className={`preprocessing-result ${processing?.preprocessing ? 'passed' : 'waiting'}`}>
+        <ShieldCheck />
+        <div><strong>{processing?.preprocessing ? 'Předběžná kontrola dokončena' : 'Předběžná kontrola čeká na zpracování'}</strong><span>{processing?.preprocessing ? 'Událost odpovídá uložené žádosti a je připravena k ručnímu posouzení.' : 'Worker zatím neuložil výsledek kontroly.'}</span>{processing?.preprocessing && <small>{formatDate(processing.preprocessing.checkedAt, true)} · Event {shortId(processing.preprocessing.eventId)}</small>}</div>
+      </div>
+      <ol className="audit-list">{processing?.statusHistory.map(entry => <li key={entry.id}>
+        <i />
+        <div className="audit-entry-main"><strong>{statusLabels[entry.newStatus]}</strong><span>{entry.previousStatus ? `${statusLabels[entry.previousStatus]} → ` : ''}{statusLabels[entry.newStatus]} · verze {entry.applicationVersion}</span><small>{formatDate(entry.changedAt, true)} · {entry.changedBy === 'WORKER' ? 'Processing worker' : 'Loan API'}</small></div>
+        <div className="audit-identifiers"><span>Request {shortId(entry.requestId)}</span>{entry.eventId && <span>Event {shortId(entry.eventId)}</span>}</div>
+      </li>)}</ol>
+    </>}
+  </section>
+}
+
+function auditCountLabel(count: number) {
+  if (count === 1) return '1 záznam'
+  if (count >= 2 && count <= 4) return `${count} záznamy`
+  return `${count} záznamů`
 }
 
 function Data({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <div className="data-item"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div> }

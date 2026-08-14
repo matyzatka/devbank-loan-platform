@@ -77,6 +77,14 @@ public class LoanApplicationController {
         return LoanApplicationResponse.from(service.get(id));
     }
 
+    @GetMapping("/{id}/processing")
+    @Operation(summary = "Retrieve preliminary processing and status audit history")
+    public ApplicationProcessingResponse getProcessing(@PathVariable UUID id) {
+        try (var ignored = MDC.putCloseable("applicationId", id.toString())) {
+            return ApplicationProcessingResponse.from(service.getProcessingDetails(id));
+        }
+    }
+
     @GetMapping
     @Operation(summary = "List and filter loan applications")
     public LoanApplicationPageResponse list(
@@ -92,7 +100,9 @@ public class LoanApplicationController {
     public LoanApplicationResponse approve(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionLoanApplicationRequest request) {
-        return transitionCompleted(service.approve(id, request.expectedVersion()));
+        try (var ignored = MDC.putCloseable("applicationId", id.toString())) {
+            return transitionCompleted(service.approve(id, request.expectedVersion()));
+        }
     }
 
     @PostMapping("/{id}/reject")
@@ -100,17 +110,13 @@ public class LoanApplicationController {
     public LoanApplicationResponse reject(
             @PathVariable UUID id,
             @Valid @RequestBody TransitionLoanApplicationRequest request) {
-        return transitionCompleted(service.reject(id, request.expectedVersion()));
+        try (var ignored = MDC.putCloseable("applicationId", id.toString())) {
+            return transitionCompleted(service.reject(id, request.expectedVersion()));
+        }
     }
 
     private static LoanApplicationResponse transitionCompleted(
             com.example.loanplatform.domain.LoanApplication application) {
-        try (var ignored = MDC.putCloseable("applicationId", application.getId().toString())) {
-            log.info(
-                    "Loan application status changed: status={}, version={}",
-                    application.getStatus(),
-                    application.getVersion());
-        }
         return LoanApplicationResponse.from(application);
     }
 

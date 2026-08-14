@@ -26,6 +26,29 @@ export interface CreateApplicationInput {
   currency: string
 }
 
+export interface PreprocessingResult {
+  eventId: string
+  result: 'PASSED'
+  details: string
+  checkedAt: string
+}
+
+export interface StatusHistoryEntry {
+  id: string
+  previousStatus: ApplicationStatus | null
+  newStatus: ApplicationStatus
+  applicationVersion: number
+  changedAt: string
+  changedBy: 'API' | 'WORKER'
+  requestId: string
+  eventId: string | null
+}
+
+export interface ApplicationProcessing {
+  preprocessing: PreprocessingResult | null
+  statusHistory: StatusHistoryEntry[]
+}
+
 export interface ApiProblem {
   title?: string
   detail?: string

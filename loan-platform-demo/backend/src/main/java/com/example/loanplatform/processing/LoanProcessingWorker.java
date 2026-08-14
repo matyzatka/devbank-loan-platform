@@ -1,6 +1,7 @@
 package com.example.loanplatform.processing;
 
 import com.example.loanplatform.application.LoanApplicationService;
+import com.example.loanplatform.application.PreprocessingResultRepository;
 import com.example.loanplatform.configuration.CorrelationIds;
 import com.example.loanplatform.messaging.ProcessedEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;

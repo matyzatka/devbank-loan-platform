@@ -6,6 +6,7 @@ import com.example.loanplatform.domain.event.LoanApplicationStatusChangedEvent;
 import com.example.loanplatform.domain.event.LoanApplicationSubmittedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -22,12 +23,14 @@ import java.util.function.Consumer;
  * audit record and outbox event so externally visible state can never outrun event delivery.
  */
 @Service
+@Slf4j
 public class LoanApplicationService {
 
     private final LoanApplicationRepository applications;
     private final IdempotencyRepository idempotency;
     private final OutboxRepository outbox;
     private final StatusHistoryRepository statusHistory;
+    private final PreprocessingResultRepository preprocessingResults;
     private final RequestIdProvider requestIds;
     private final Clock clock;
 
@@ -36,12 +39,14 @@ public class LoanApplicationService {
             IdempotencyRepository idempotency,
             OutboxRepository outbox,
             StatusHistoryRepository statusHistory,
+            PreprocessingResultRepository preprocessingResults,
             RequestIdProvider requestIds,
             Clock clock) {
         this.applications = applications;
         this.idempotency = idempotency;
         this.outbox = outbox;
         this.statusHistory = statusHistory;
+        this.preprocessingResults = preprocessingResults;
         this.requestIds = requestIds;
         this.clock = clock;
     }
@@ -64,6 +69,8 @@ public class LoanApplicationService {
             throw new IdempotencyKeyConflictException(idempotencyKey);
         }
         if (!claim.newlyClaimed()) {
+            log.debug("Idempotent create replay resolved to existing application: applicationId={}",
+                    claim.applicationId());
             return get(claim.applicationId());
         }
 
@@ -109,6 +116,21 @@ public class LoanApplicationService {
                 page,
                 size,
                 applications.count(status, normalizedQuery));
+    }
+
+    /** Returns the operational evidence associated with an application without mutating workflow state. */
+    @Transactional(readOnly = true)
+    public ApplicationProcessingDetails getProcessingDetails(UUID applicationId) {
+        get(applicationId);
+        var details = new ApplicationProcessingDetails(
+                preprocessingResults.findByApplicationId(applicationId),
+                statusHistory.findByApplicationId(applicationId));
+        log.debug(
+                "Application processing details loaded: applicationId={}, historyEntries={}, preprocessingPresent={}",
+                applicationId,
+                details.statusHistory().size(),
+                details.preprocessing().isPresent());
+        return details;
     }
 
     /** Worker-only entry point; the submitted event is retained as the causal audit identifier. */
@@ -169,6 +191,10 @@ public class LoanApplicationService {
                 application.getId(), previousStatus, application.getStatus(), application.getVersion(),
                 application.getUpdatedAt(), source, requestId,
                 causationEventId == null ? emittedEventId : causationEventId);
+        log.info(
+                "Application state persisted: applicationId={}, from={}, to={}, version={}, source={}, eventId={}",
+                application.getId(), previousStatus, application.getStatus(), application.getVersion(),
+                source, causationEventId == null ? emittedEventId : causationEventId);
         return application;
     }
 

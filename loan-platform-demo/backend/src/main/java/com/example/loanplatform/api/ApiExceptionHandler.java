@@ -21,9 +21,11 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.MDC;
 import com.example.loanplatform.configuration.CorrelationIds;
+import lombok.extern.slf4j.Slf4j;
 
 /** Maps domain and application failures to stable RFC 9457 responses without exposing internals. */
 @RestControllerAdvice
+@Slf4j
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(LoanApplicationNotFoundException.class)
@@ -37,11 +39,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             OptimisticLockingConflictException.class
     })
     ProblemDetail handleConflict(RuntimeException exception) {
+        log.warn("Business command rejected: exceptionType={}, reason={}",
+                exception.getClass().getSimpleName(), exception.getMessage());
         return problem(HttpStatus.CONFLICT, "BUSINESS_CONFLICT", exception.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail handleBadRequest(IllegalArgumentException exception) {
+        log.debug("Invalid request rejected: reason={}", exception.getMessage());
         return problem(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage());
     }
 

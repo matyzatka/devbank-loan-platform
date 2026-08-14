@@ -182,10 +182,16 @@ class LoanApplicationControllerTest {
                 "worker-test-request",
                 UUID.randomUUID());
         var approved = postAction("/api/v1/applications/" + id + "/approve", 1);
+        var processing = json(get("/api/v1/applications/" + id + "/processing"));
         var invalid = postAction("/api/v1/applications/" + id + "/reject", 2);
 
         assertThat(approved.statusCode()).isEqualTo(200);
         assertThat(json(approved).get("status").asText()).isEqualTo("APPROVED");
+        assertThat(processing.get("preprocessing").isNull()).isTrue();
+        assertThat(processing.get("statusHistory").size()).isEqualTo(3);
+        assertThat(processing.at("/statusHistory/0/newStatus").asText()).isEqualTo("SUBMITTED");
+        assertThat(processing.at("/statusHistory/1/changedBy").asText()).isEqualTo("WORKER");
+        assertThat(processing.at("/statusHistory/2/newStatus").asText()).isEqualTo("APPROVED");
         assertThat(invalid.statusCode()).isEqualTo(409);
         assertProblem(invalid, "BUSINESS_CONFLICT");
         assertThat(dsl.fetchCount(table("outbox_event"))).isEqualTo(3);

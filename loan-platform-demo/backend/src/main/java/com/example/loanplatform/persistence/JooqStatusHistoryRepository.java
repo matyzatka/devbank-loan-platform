@@ -2,6 +2,7 @@ package com.example.loanplatform.persistence;
 
 import com.example.loanplatform.application.StatusChangeSource;
 import com.example.loanplatform.application.StatusHistoryRepository;
+import com.example.loanplatform.application.StatusHistoryEntry;
 import com.example.loanplatform.domain.LoanApplicationStatus;
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.List;
 
 import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
@@ -37,6 +39,27 @@ public class JooqStatusHistoryRepository implements StatusHistoryRepository {
 
     public JooqStatusHistoryRepository(DSLContext dsl) {
         this.dsl = dsl;
+    }
+
+    @Override
+    public List<StatusHistoryEntry> findByApplicationId(UUID applicationId) {
+        return dsl.select(
+                        ID, PREVIOUS_STATUS, NEW_STATUS, APPLICATION_VERSION,
+                        CHANGED_AT, CHANGED_BY, REQUEST_ID, EVENT_ID)
+                .from(HISTORY)
+                .where(APPLICATION_ID.eq(applicationId))
+                .orderBy(CHANGED_AT.asc(), APPLICATION_VERSION.asc())
+                .fetch(record -> new StatusHistoryEntry(
+                        record.get(ID),
+                        record.get(PREVIOUS_STATUS) == null
+                                ? null
+                                : LoanApplicationStatus.valueOf(record.get(PREVIOUS_STATUS)),
+                        LoanApplicationStatus.valueOf(record.get(NEW_STATUS)),
+                        record.get(APPLICATION_VERSION),
+                        record.get(CHANGED_AT).toInstant(),
+                        StatusChangeSource.valueOf(record.get(CHANGED_BY)),
+                        record.get(REQUEST_ID),
+                        record.get(EVENT_ID)));
     }
 
     @Override

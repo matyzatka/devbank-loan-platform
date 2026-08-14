@@ -1,6 +1,6 @@
 package com.example.loanplatform.persistence;
 
-import com.example.loanplatform.processing.PreprocessingResultRepository;
+import com.example.loanplatform.application.PreprocessingResultRepository;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.Record;
@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.Optional;
+import com.example.loanplatform.application.PreprocessingResult;
 
 import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.name;
@@ -31,6 +33,20 @@ public class JooqPreprocessingResultRepository implements PreprocessingResultRep
 
     public JooqPreprocessingResultRepository(DSLContext dsl) {
         this.dsl = dsl;
+    }
+
+    @Override
+    public Optional<PreprocessingResult> findByApplicationId(UUID applicationId) {
+        return dsl.select(EVENT_ID, RESULT_VALUE, DETAILS, CHECKED_AT)
+                .from(RESULT)
+                .where(APPLICATION_ID.eq(applicationId))
+                .orderBy(CHECKED_AT.desc())
+                .limit(1)
+                .fetchOptional(record -> new PreprocessingResult(
+                        record.get(EVENT_ID),
+                        record.get(RESULT_VALUE),
+                        record.get(DETAILS),
+                        record.get(CHECKED_AT).toInstant()));
     }
 
     @Override

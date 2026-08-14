@@ -93,6 +93,8 @@ Optimistic locking protects the aggregate through its `version` column. Approval
 
 Logs carry `requestId`, `applicationId`, and `eventId` in MDC. The HTTP header remains `X-Correlation-ID` for compatibility; internally its value is treated as `requestId` and propagated in Kafka headers.
 
+The application detail screen exposes the persisted preliminary-processing result and complete status history through the read-only `/api/v1/applications/{id}/processing` endpoint. This makes the same identifiers visible in the UI, API, database, and logs.
+
 ## Verified scenarios
 
 - duplicate HTTP requests with the same `Idempotency-Key`;
