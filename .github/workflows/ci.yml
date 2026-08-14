@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · Java 21 / Maven
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: loan-platform-demo/backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 and Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: loan-platform-demo/backend/pom.xml
+
+      - name: Compile and test backend
+        run: mvn --batch-mode --no-transfer-progress verify
+
+      - name: Upload executable backend JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: loan-platform-demo/backend/target/loan-platform-backend-*.jar
+          if-no-files-found: error
+          retention-days: 1
+
+  frontend:
+    name: Frontend · Node.js 22
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: loan-platform-demo/frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 and npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: loan-platform-demo/frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Build production frontend
+        run: npm run build
+
+  docker:
+    name: Docker images · ${{ github.sha }}
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download executable backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: loan-platform-demo/backend/target
+
+      - name: Build backend image
+        run: docker build --tag "devbank-backend:${GITHUB_SHA}" loan-platform-demo/backend
+
+      - name: Build frontend image
+        run: docker build --tag "devbank-frontend:${GITHUB_SHA}" loan-platform-demo/frontend
