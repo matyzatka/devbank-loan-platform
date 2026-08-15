@@ -35,8 +35,19 @@ $password = $null
 if ($LASTEXITCODE -ne 0) { throw 'Docker could not authenticate to ECR.' }
 
 function Test-EcrTag([string]$Repository, [string]$Tag) {
-    & aws ecr describe-images --repository-name $Repository --image-ids "imageTag=$Tag" --region $script:DevBankRegion *> $null
-    return $LASTEXITCODE -eq 0
+    # A missing image is the expected cache-miss path. Windows PowerShell turns
+    # the AWS CLI stderr for that case into a terminating NativeCommandError
+    # when the script-wide ErrorActionPreference is Stop, so scope the relaxed
+    # preference to this probe and restore it immediately afterwards.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'SilentlyContinue'
+        & aws ecr describe-images --repository-name $Repository --image-ids "imageTag=$Tag" --region $script:DevBankRegion *> $null
+        $imageExists = $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return $imageExists
 }
 function Publish-ApplicationImage([string]$Repository, [string]$Context) {
     if (Test-EcrTag $Repository $sha) { Write-Host "$Repository`:$sha already exists; skipping immutable image push."; return }
