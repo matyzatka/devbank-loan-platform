@@ -12,7 +12,7 @@ Existující kontejnery se nasazují bez změny aplikačních rolí:
 - Application Load Balancer zpřístupňuje pouze frontend;
 - Nginx směruje `/api` na privátní Loan API;
 - API a worker používají společný PostgreSQL cluster a Kafka-compatible broker;
-- CloudWatch centralizuje strukturované logy, metriky a alarmy;
+- CloudWatch centralizuje strukturované aplikační a databázové logy;
 - Secrets Manager poskytuje aplikační přihlašovací údaje za běhu.
 - Interface VPC endpoints zpřístupňují ECR, CloudWatch Logs a Secrets Manager bez NAT Gateway; S3 gateway endpoint zajišťuje stažení image layers.
 
@@ -50,7 +50,7 @@ Krátkodobá varianta zachovává plný aplikační a event-driven tok při kont
 - RDS for PostgreSQL v šifrované Single-AZ konfiguraci s automatickými zálohami;
 - jeden Kafka broker v KRaft režimu na Fargate s ephemeral storage a privátním DNS;
 - dvě Availability Zones pro ALB, aplikační subnety a plánování tasků;
-- krátká retence logů, malé horní limity škálování a povinné datum ukončení prostředí.
+- krátká retence logů a explicitní deploy/destroy lifecycle s následným auditem zbytkových zdrojů.
 
 Single-AZ databáze a jednouzlový broker neposkytují vysokou dostupnost. Nahrazení Kafka tasku odstraní lokální broker data. Varianta je určená výhradně pro fiktivní data a nemá produkční SLA.
 
@@ -66,6 +66,12 @@ Trvalý provoz nahrazuje úsporné kompromisy spravovanou datovou vrstvou a redu
 - interní service discovery nebo interní ALB pro Loan API;
 - WAF před veřejným ALB, řízené KMS klíče a oddělená prostředí;
 - target tracking autoscaling a deployment circuit breaker pro aplikační služby.
+
+## Hranice implementace
+
+V ukázkové variantě jsou implementované ECR, privátní ECS tasky, RDS Single-AZ, jednouzlová Kafka, CloudFront/ALB vstup, Secrets Manager, CloudWatch Logs a bezpečný lifecycle obou stacků. Aplikace vystavuje Micrometer metriky, CDK je však zatím neexportuje do CloudWatch a nevytváří alarmy. Datum ukončení není plánováno automaticky; vynucuje ho potvrzovaný destroy skript a fail-closed audit.
+
+GitHub OIDC role, automatický AWS deployment, blokování promotion podle výsledku image scanu, WAF, autoscaling, managed Kafka a produkční observabilita jsou cílový návrh, nikoli součást aktuální implementace.
 
 ## Srovnání variant
 

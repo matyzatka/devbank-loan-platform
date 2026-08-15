@@ -2,11 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Check, Info, ShieldCheck } from 'lucide-react'
 import { Controller, useForm } from 'react-hook-form'
+import { useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { ApiError } from '../../api/client'
 import { formatAmountInput, parseAmountInput } from '../../utils/format'
 import { applicationKeys, createApplication } from './api'
+import { prepareSubmission, type PendingSubmission } from './submission'
 
 // Client validation improves feedback; the backend remains the authoritative boundary.
 const schema = z.object({
@@ -20,12 +22,18 @@ type FormValues = z.infer<typeof schema>
 export function NewApplicationPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const pendingSubmission = useRef<PendingSubmission | undefined>(undefined)
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { customerId: '', currency: 'CZK' } })
   const mutation = useMutation({
     mutationFn: createApplication,
     onSuccess: application => { void queryClient.invalidateQueries({ queryKey: applicationKeys.all }); void navigate(`/applications/${application.id}`, { state: { created: true } }) },
   })
   const problem = mutation.error instanceof ApiError ? mutation.error.problem : undefined
+  const submit = (values: FormValues) => {
+    const prepared = prepareSubmission(values, pendingSubmission.current)
+    pendingSubmission.current = prepared.pending
+    mutation.mutate(prepared.command)
+  }
 
   return <div className="page form-page">
     <Link to="/applications" className="back-link"><ArrowLeft size={17} /> Zpět na přehled</Link>
@@ -34,7 +42,7 @@ export function NewApplicationPage() {
         <div className="step-label"><span>1</span> Nová žádost</div>
         <h1>Základní údaje o úvěru</h1><p className="lead">Založte žádost pro firemního klienta. Po uložení proběhne předběžná automatická kontrola.</p>
         {mutation.isError && <div className="inline-alert"><Info size={19} /><div><strong>Žádost se nepodařilo uložit</strong><span>{mutation.error.message}</span>{problem?.correlationId && <small>Referenční ID: {problem.correlationId}</small>}</div></div>}
-        <form onSubmit={event => void form.handleSubmit(values => mutation.mutate(values))(event)} noValidate>
+        <form onSubmit={event => void form.handleSubmit(submit)(event)} noValidate>
           <label className="field"><span>Název firemního klienta <i>*</i></span><input {...form.register('customerId')} placeholder="např. Labe Engineering s.r.o." aria-invalid={!!form.formState.errors.customerId} />{form.formState.errors.customerId && <small>{form.formState.errors.customerId.message}</small>}</label>
           <div className="field-row"><label className="field amount-field"><span>Požadovaná částka <i>*</i></span><Controller control={form.control} name="amount" render={({ field }) => <input ref={field.ref} name={field.name} value={formatAmountInput(field.value)} onBlur={field.onBlur} onChange={event => field.onChange(parseAmountInput(event.target.value))} inputMode="numeric" placeholder="2 500 000" aria-invalid={!!form.formState.errors.amount} />} />{form.formState.errors.amount && <small>{form.formState.errors.amount.message}</small>}</label><label className="field currency-field"><span>Měna <i>*</i></span><select {...form.register('currency')}><option>CZK</option><option>EUR</option><option>USD</option></select></label></div>
           <div className="form-info"><ShieldCheck size={20} /><span><strong>Ochrana proti duplicitnímu založení</strong><small>Opakované odeslání stejného požadavku nevytvoří další žádost.</small></span></div>

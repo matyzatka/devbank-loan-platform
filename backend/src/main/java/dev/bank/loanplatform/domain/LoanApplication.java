@@ -93,20 +93,26 @@ public final class LoanApplication {
     }
 
     public void reject(String reason, Clock clock) {
-        rejectionReason = requireText(reason, "rejectionReason").trim();
+        assertTransitionAllowed(LoanApplicationStatus.REJECTED);
+        var validatedReason = requireText(reason, "rejectionReason").trim();
         transitionTo(LoanApplicationStatus.REJECTED, clock);
+        rejectionReason = validatedReason;
     }
 
     private void transitionTo(LoanApplicationStatus targetStatus, Clock clock) {
         Objects.requireNonNull(clock, "clock must not be null");
-        if (!status.canTransitionTo(targetStatus)) {
-            throw new InvalidLoanApplicationTransitionException(status, targetStatus);
-        }
+        assertTransitionAllowed(targetStatus);
 
         // Version is part of the aggregate contract and is persisted with a compare-and-set update.
         status = targetStatus;
         version++;
         updatedAt = clock.instant();
+    }
+
+    private void assertTransitionAllowed(LoanApplicationStatus targetStatus) {
+        if (!status.canTransitionTo(targetStatus)) {
+            throw new InvalidLoanApplicationTransitionException(status, targetStatus);
+        }
     }
 
     private static String requireText(String value, String fieldName) {

@@ -31,6 +31,7 @@ import java.util.UUID;
 public class LoanProcessingWorker {
 
     private static final String SUBMITTED_EVENT = "LoanApplicationSubmitted";
+    private static final int SUPPORTED_EVENT_VERSION = 1;
 
     private final ProcessedEventRepository processedEvents;
     private final PreprocessingResultRepository preprocessingResults;
@@ -62,6 +63,7 @@ public class LoanProcessingWorker {
         if (!SUBMITTED_EVENT.equals(requiredText(event, "eventType"))) {
             return;
         }
+        validateEventVersion(event);
 
         var eventId = requiredUuid(event, "eventId");
         var applicationId = requiredUuid(event, "applicationId");
@@ -130,6 +132,14 @@ public class LoanProcessingWorker {
 
     private static UUID requiredUuid(JsonNode event, String field) {
         return UUID.fromString(requiredText(event, field));
+    }
+
+    static void validateEventVersion(JsonNode event) {
+        var version = event.path("eventVersion");
+        if (!version.canConvertToInt() || version.intValue() != SUPPORTED_EVENT_VERSION) {
+            throw new IllegalArgumentException(
+                    "Unsupported LoanApplicationSubmitted eventVersion: " + version.asText("missing"));
+        }
     }
 
     private static String requiredText(JsonNode event, String field) {

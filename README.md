@@ -9,13 +9,17 @@ DevBank zpracovává žádosti o korporátní úvěry od založení přes automa
 
 > **Ukázkové prostředí:** systém používá výhradně fiktivní data a neprovádí úvěrový scoring.
 
+## Implementováno a ověřeno
+
+Repozitář obsahuje spustitelný lokální i AWS tok, automatizované backendové a frontendové testy, integrační Kafka smoke test, CDK guardraily a řízený deploy/destroy lifecycle. Produkční cíle jako uživatelská autentizace, GitHub OIDC deployment, WAF, alarmy, Multi-AZ databáze a managed Kafka jsou záměrně popsány jako navazující architektura, nikoli jako hotové součásti dema.
+
 ## Technická rozhodnutí a důkazy
 
 | Rozhodnutí | Provozní význam | Důkaz |
 |---|---|---|
 | **Skutečná procesní hranice** | Loan API přijímá commandy a publikuje outbox; Processing Worker samostatně konzumuje business události. Obě role lze nasazovat a škálovat nezávisle. | [Compose topologie](docker-compose.yml), [worker](backend/src/main/java/dev/bank/loanplatform/processing/LoanProcessingWorker.java) |
 | **Atomická business transakce** | Stav žádosti, auditní historie a outbox event se uloží společně. Databázový commit nemůže předběhnout událost potřebnou pro další zpracování. | [aplikační služba](backend/src/main/java/dev/bank/loanplatform/application/LoanApplicationService.java), [repository test](backend/src/test/java/dev/bank/loanplatform/persistence/JooqLoanApplicationRepositoryTest.java) |
-| **Transactional outbox připravený na více instancí** | Publisher zamyká dávku přes `FOR UPDATE SKIP LOCKED`, čeká na potvrzení brokeru a eviduje každý pokus. Selhání ponechá event k bezpečnému opakování. | [outbox repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqOutboxRepository.java), [failure test](backend/src/test/java/dev/bank/loanplatform/messaging/OutboxPublicationFailureTest.java) |
+| **Transactional outbox připravený na více publisherů** | Publisher zamyká dávku přes `FOR UPDATE SKIP LOCKED`, čeká na potvrzení brokeru a eviduje každý pokus. Selhání ponechá event k bezpečnému opakování; globální pořadí ani pořadí více eventů stejného agregátu tato strategie sama negarantuje. | [outbox repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqOutboxRepository.java), [failure test](backend/src/test/java/dev/bank/loanplatform/messaging/OutboxPublicationFailureTest.java) |
 | **At-least-once bez dvojího business účinku** | Worker atomicky registruje `eventId`; opakované doručení stejné události stav podruhé nezmění. | [processed-event repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqProcessedEventRepository.java), [Kafka integrační test](backend/src/test/java/dev/bank/loanplatform/messaging/KafkaOutboxIntegrationTest.java) |
 | **Řízené souběžné změny** | Explicitní stavový automat odmítá neplatné přechody a compare-and-set update chrání agregát před ztracenou aktualizací. | [doménový model](backend/src/main/java/dev/bank/loanplatform/domain/LoanApplication.java), [optimistic locking test](backend/src/test/java/dev/bank/loanplatform/persistence/JooqLoanApplicationRepositoryTest.java) |
 | **Idempotentní HTTP commandy** | `Idempotency-Key` váže výsledek na hash požadavku: opakování vrací původní žádost, kolize s jiným obsahem končí konfliktem. | [idempotency repository](backend/src/main/java/dev/bank/loanplatform/persistence/JooqIdempotencyRepository.java), [API test](backend/src/test/java/dev/bank/loanplatform/api/LoanApplicationControllerTest.java) |

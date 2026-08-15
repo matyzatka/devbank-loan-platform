@@ -5,7 +5,7 @@ Dokument stanovuje ochranné mechanismy [cílové AWS architektury](aws-architec
 ## Zásady
 
 - žádné dlouhodobé AWS access keys v GitHubu, ECS tasku, image ani repozitáři;
-- GitHub Actions používá krátkodobé přihlašovací údaje přes OIDC a `AssumeRoleWithWebIdentity`;
+- lokální deployment používá krátkodobé přihlašovací údaje; CI nemá AWS credentials ani deploy krok;
 - každá runtime role má pouze oprávnění potřebná pro svůj proces;
 - preferovaným veřejným vstupem je CloudFront s HTTPS a přesměrováním HTTP;
 - ALB přijímá HTTP od CloudFront a zůstává přímo dosažitelný jako explicitní kompromis prostředí bez vlastní domény;
@@ -43,7 +43,9 @@ Společná execution role může pouze:
 
 Runtime task role nemá žádná AWS API oprávnění. ECR pull, zápis do konkrétní log group a načtení databázového secretu zajišťují oddělené execution role. Jednouzlová Kafka komunikuje pouze uvnitř VPC a nepoužívá AWS IAM autentizaci; to je explicitní omezení ukázkové varianty.
 
-### GitHub deployment role
+### Cílová GitHub deployment role
+
+Tato role ani OIDC deployment workflow nejsou v ukázkovém prostředí implementované. Produkční návrh používá následující omezení:
 
 Trust policy omezuje OIDC issuer na `token.actions.githubusercontent.com`, konkrétní GitHub repository, chráněnou větev nebo schválené environment. Role smí:
 
@@ -72,7 +74,7 @@ Secrets Manager obsahuje generované databázové heslo a uživatelské jméno. 
 - logy obsahují `requestId`, `applicationId` a `eventId`, nikoli celé žádosti, přihlašovací údaje nebo citlivé payloady;
 - CloudWatch retention je explicitní, ne nekonečná;
 - přístup k logům a DB je auditovatelný přes CloudTrail;
-- ECR zapíná immutable tags a enhanced/on-push scanning; kritický nález blokuje promotion.
+- ECR zapíná immutable tags a scan-on-push. Automatické blokování promotion podle závažnosti nálezu zatím není implementované.
 
 ## Další produkční kontroly
 

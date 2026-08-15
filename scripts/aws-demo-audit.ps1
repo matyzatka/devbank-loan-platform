@@ -8,10 +8,10 @@ foreach ($stack in @($script:DevBankApplicationStack, $script:DevBankImagesStack
     if ($status -ne 'NOT_FOUND') { $findings.Add("CloudFormation stack $stack ($status)") }
 }
 
-$clusters = (& aws ecs list-clusters --region $script:DevBankRegion --query "clusterArns[?ends_with(@, '/$($script:DevBankCluster)')]" --output text 2>$null).Trim()
+$clusters = Invoke-AwsText -Arguments @('ecs','list-clusters','--region',$script:DevBankRegion,'--query',"clusterArns[?ends_with(@, '/$($script:DevBankCluster)')]",'--output','text')
 if ($clusters) {
-    $services = (& aws ecs list-services --cluster $script:DevBankCluster --region $script:DevBankRegion --query 'serviceArns' --output text 2>$null).Trim()
-    $tasks = (& aws ecs list-tasks --cluster $script:DevBankCluster --region $script:DevBankRegion --query 'taskArns' --output text 2>$null).Trim()
+    $services = Invoke-AwsText -Arguments @('ecs','list-services','--cluster',$script:DevBankCluster,'--region',$script:DevBankRegion,'--query','serviceArns','--output','text')
+    $tasks = Invoke-AwsText -Arguments @('ecs','list-tasks','--cluster',$script:DevBankCluster,'--region',$script:DevBankRegion,'--query','taskArns','--output','text')
     $findings.Add("ECS cluster $script:DevBankCluster; services='$services'; tasks='$tasks'")
 }
 
@@ -26,12 +26,15 @@ $checks = @(
 )
 foreach ($check in $checks) {
     [string[]]$arguments = $check.Command
-    $value = (& aws @arguments 2>$null).Trim()
-    if ($LASTEXITCODE -eq 0 -and $value) { $findings.Add("$($check.Label): $value") }
+    $value = Invoke-AwsText -Arguments $arguments
+    if ($value) { $findings.Add("$($check.Label): $value") }
 }
 foreach ($repository in $script:DevBankRepositories) {
-    & aws ecr describe-repositories --repository-names $repository --region $script:DevBankRegion *> $null
-    if ($LASTEXITCODE -eq 0) { $findings.Add("ECR repository: $repository") }
+    $value = Invoke-AwsText -Arguments @(
+        'ecr','describe-repositories','--repository-names',$repository,
+        '--region',$script:DevBankRegion,'--query','repositories[0].repositoryName','--output','text'
+    ) -AllowedMissingPattern 'RepositoryNotFoundException'
+    if ($value) { $findings.Add("ECR repository: $repository") }
 }
 
 Write-Host "$script:DevBankToolkitStack: $(Get-StackStatus $script:DevBankToolkitStack) (intentionally untouched)"

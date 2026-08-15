@@ -20,6 +20,30 @@ function Invoke-CheckedNative {
     }
 }
 
+function Invoke-AwsText {
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [string]$AllowedMissingPattern
+    )
+
+    # AWS CLI writes service errors to stderr. Capture them under a locally relaxed
+    # preference so expected not-found responses can be distinguished from auth,
+    # network and configuration failures without weakening the script-wide fail-fast policy.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = & aws @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -eq 0) { return ($output -join [Environment]::NewLine).Trim() }
+    $message = ($output -join [Environment]::NewLine).Trim()
+    if ($AllowedMissingPattern -and $message -match $AllowedMissingPattern) { return $null }
+    throw "AWS CLI failed ($exitCode): aws $($Arguments -join ' ')`n$message"
+}
+
 function Get-ExpectedAccountId {
     param([string]$ExpectedAccountId)
     $value = if ($ExpectedAccountId) { $ExpectedAccountId } else { $env:DEVBANK_AWS_ACCOUNT_ID }
@@ -59,9 +83,12 @@ function Assert-DevBankAwsContext {
 
 function Get-StackStatus {
     param([Parameter(Mandatory)][string]$StackName)
-    $status = & aws cloudformation describe-stacks --stack-name $StackName --region $script:DevBankRegion --query 'Stacks[0].StackStatus' --output text 2>$null
-    if ($LASTEXITCODE -ne 0) { return 'NOT_FOUND' }
-    return $status.Trim()
+    $status = Invoke-AwsText -Arguments @(
+        'cloudformation', 'describe-stacks', '--stack-name', $StackName,
+        '--region', $script:DevBankRegion, '--query', 'Stacks[0].StackStatus', '--output', 'text'
+    ) -AllowedMissingPattern 'ValidationError.*(does not exist|not exist)'
+    if ($null -eq $status) { return 'NOT_FOUND' }
+    return $status
 }
 
 function Confirm-ExactPhrase {

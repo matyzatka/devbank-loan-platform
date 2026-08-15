@@ -70,6 +70,8 @@ class LoanApplicationTest {
             Consumer<LoanApplication> transition) {
         var application = applicationIn(initialStatus);
         var versionBeforeAttempt = application.getVersion();
+        var updatedAtBeforeAttempt = application.getUpdatedAt();
+        var rejectionReasonBeforeAttempt = application.getRejectionReason();
 
         assertThatThrownBy(() -> transition.accept(application))
                 .isInstanceOf(InvalidLoanApplicationTransitionException.class)
@@ -78,6 +80,8 @@ class LoanApplicationTest {
 
         assertThat(application.getStatus()).isEqualTo(initialStatus);
         assertThat(application.getVersion()).isEqualTo(versionBeforeAttempt);
+        assertThat(application.getUpdatedAt()).isEqualTo(updatedAtBeforeAttempt);
+        assertThat(application.getRejectionReason()).isEqualTo(rejectionReasonBeforeAttempt);
     }
 
     @ParameterizedTest

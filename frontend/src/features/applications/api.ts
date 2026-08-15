@@ -31,11 +31,15 @@ export function getApplicationProcessing(id: string) {
   return apiRequest<ApplicationProcessing>(`/api/v1/applications/${id}/processing`)
 }
 
-export function createApplication(input: CreateApplicationInput) {
-  // A new key belongs to one user submission; TanStack retries of this request remain safe server-side.
+export interface CreateApplicationCommand {
+  input: CreateApplicationInput
+  idempotencyKey: string
+}
+
+export function createApplication({ input, idempotencyKey }: CreateApplicationCommand) {
   return apiRequest<LoanApplication>('/api/v1/applications', {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(input),
   })
 }

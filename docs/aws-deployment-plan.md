@@ -36,11 +36,13 @@ npm run aws:destroy
 npm run aws:audit
 ```
 
-`aws:deploy` před změnou ověří identitu a region `eu-central-1`, připravený `CDKToolkit`, čistý Git commit, lokální build/test/synth a `cdk diff`. Pokračuje pouze po zadání `DEPLOY DEVBANK DEMO`. Skript nikdy nespouští bootstrap.
+`aws:deploy` před změnou ověří identitu a region `eu-central-1`, připravený `CDKToolkit`, čistý Git commit, CDK build/guardrail test/synth a `cdk diff`. Pokračuje pouze po zadání `DEPLOY DEVBANK DEMO`. Skript nikdy nespouští bootstrap.
 
 `aws:destroy` vypíše fyzické resources obou přesně pojmenovaných stacků a pokračuje pouze po zadání `DESTROY DEVBANK DEMO`. Odstraní aplikační stack, následně images stack a spustí audit. Nepoužívá `--all` ani wildcard.
 
-`aws:audit` kontroluje CloudFormation stacky, ECS služby a tasky, RDS, ALB, CloudFront, ECR, Secrets Manager, CloudWatch log groups, VPC a endpoints. Nalezené zbytky vracejí nenulový exit code; stav `CDKToolkit` je pouze informativní.
+`aws:audit` kontroluje CloudFormation stacky, ECS služby a tasky, RDS, ALB, CloudFront, ECR, Secrets Manager, CloudWatch log groups, VPC a endpoints. Nalezené zbytky vracejí nenulový exit code; stav `CDKToolkit` je pouze informativní. Chyba oprávnění, sítě nebo AWS API audit okamžitě ukončí a nikdy se neinterpretuje jako absence zdroje.
+
+Backendové a frontendové testy i lokální end-to-end smoke test spouští CI. Deployment wrapper sestaví produkční Docker image, ale celý testovací matrix neopakuje; post-deployment kontrola se provádí samostatně proti publikovanému endpointu.
 
 ## Resources spravované CDK
 

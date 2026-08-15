@@ -32,6 +32,8 @@ flowchart LR
 
 Historie uchovává původní a nový stav, verzi, čas, aktéra, `requestId`, `eventId` a případný důvod zamítnutí. Stejné identifikátory vstupují do MDC a propojují HTTP požadavek, databázovou změnu a asynchronní zpracování bez logování celého business payloadu.
 
+Outbox poskytuje atomické uložení business změny a události a doručení alespoň jednou. `FOR UPDATE SKIP LOCKED` umožňuje paralelní publishery bez dvojího claimu stejného řádku, negarantuje však samo o sobě pořadí více nepublikovaných událostí jednoho agregátu. Současný workflow publikuje jedinou iniciační událost na agregát; před rozšířením na více navazujících událostí by repository muselo claimovat pouze nejstarší nepublikovaný záznam každého agregátu.
+
 Actuator poskytuje liveness a readiness endpointy. Metrika `loan.outbox.pending` zpřístupňuje počet nepublikovaných eventů; Kafka a jOOQ logy jsou v běžném provozu omezené na `WARN`.
 
 ## Databázové schéma a referenční data
