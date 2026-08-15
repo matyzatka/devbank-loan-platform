@@ -1,4 +1,6 @@
 import * as cdk from 'aws-cdk-lib'
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecr from 'aws-cdk-lib/aws-ecr'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
@@ -322,11 +324,49 @@ export class DevBankDemoStack extends cdk.Stack {
       deregistrationDelay: cdk.Duration.seconds(30),
     })
 
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      responseHeadersPolicyName: 'devbank-demo-security-headers',
+      comment: 'Browser security headers for the DevBank HTTPS edge',
+      securityHeadersBehavior: {
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: cdk.Duration.days(365),
+          includeSubdomains: true,
+          preload: false,
+          override: true,
+        },
+        xssProtection: { protection: true, modeBlock: true, override: true },
+      },
+    })
+    const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      comment: 'DevBank demo HTTPS edge',
+      defaultBehavior: {
+        origin: new origins.LoadBalancerV2Origin(loadBalancer, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+        }),
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: securityHeaders,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        compress: true,
+      },
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+    })
+
     cdk.Tags.of(this).add('Project', 'DevBank')
     cdk.Tags.of(this).add('Environment', 'demo')
     cdk.Tags.of(this).add('ManagedBy', 'AWS CDK')
 
     new cdk.CfnOutput(this, 'LoadBalancerDnsName', { value: loadBalancer.loadBalancerDnsName })
+    new cdk.CfnOutput(this, 'FrontendUrl', { value: `https://${distribution.distributionDomainName}/applications` })
     new cdk.CfnOutput(this, 'DatabaseSecretArn', { value: databaseSecret.secretArn })
   }
 

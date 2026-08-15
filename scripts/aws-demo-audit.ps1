@@ -18,6 +18,7 @@ if ($clusters) {
 $checks = @(
     @{ Label='RDS'; Command=@('rds','describe-db-instances','--region',$script:DevBankRegion,'--query',"DBInstances[?DBInstanceIdentifier=='devbank-demo-postgres'].DBInstanceIdentifier",'--output','text') },
     @{ Label='ALB'; Command=@('elbv2','describe-load-balancers','--region',$script:DevBankRegion,'--query',"LoadBalancers[?LoadBalancerName=='devbank-demo'].LoadBalancerName",'--output','text') },
+    @{ Label='CloudFront'; Command=@('cloudfront','list-distributions','--query',"DistributionList.Items[?Comment=='DevBank demo HTTPS edge'].Id",'--output','text') },
     @{ Label='Secrets Manager'; Command=@('secretsmanager','list-secrets','--include-planned-deletion','--region',$script:DevBankRegion,'--query',"SecretList[?Name=='devbank/demo/database'].Name",'--output','text') },
     @{ Label='CloudWatch log groups'; Command=@('logs','describe-log-groups','--region',$script:DevBankRegion,'--query',"logGroups[?starts_with(logGroupName, '/devbank/demo/') || starts_with(logGroupName, '/aws/rds/instance/devbank-demo-')].logGroupName",'--output','text') },
     @{ Label='demo VPC'; Command=@('ec2','describe-vpcs','--region',$script:DevBankRegion,'--filters','Name=tag:Project,Values=DevBank','Name=tag:Environment,Values=demo','--query','Vpcs[].VpcId','--output','text') },

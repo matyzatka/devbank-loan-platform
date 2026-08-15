@@ -61,6 +61,18 @@ template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
   Port: 80,
   Protocol: 'HTTP',
 })
+template.resourceCountIs('AWS::CloudFront::Distribution', 1)
+template.hasResourceProperties('AWS::CloudFront::Distribution', {
+  DistributionConfig: {
+    DefaultCacheBehavior: {
+      ViewerProtocolPolicy: 'redirect-to-https',
+      AllowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
+      CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+    },
+    HttpVersion: 'http2and3',
+    PriceClass: 'PriceClass_100',
+  },
+})
 
 const resources = template.toJSON().Resources as Record<string, {
   Type: string

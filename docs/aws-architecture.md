@@ -8,6 +8,7 @@ Existující kontejnery se nasazují bez změny aplikačních rolí:
 
 - ECR uchovává samostatný frontendový a backendový image;
 - ECS/Fargate provozuje služby `frontend`, `loan-api` a `processing-worker`;
+- CloudFront poskytuje veřejný HTTPS endpoint na výchozí doméně AWS a směruje provoz na Application Load Balancer;
 - Application Load Balancer zpřístupňuje pouze frontend;
 - Nginx směruje `/api` na privátní Loan API;
 - API a worker používají společný PostgreSQL cluster a Kafka-compatible broker;
@@ -17,7 +18,8 @@ Existující kontejnery se nasazují bez změny aplikačních rolí:
 
 ```mermaid
 flowchart TB
-    U["Uživatel"] -->|"HTTP 80 · pouze krátkodobé demo"| ALB["Application Load Balancer"]
+    U["Uživatel"] -->|"HTTPS"| CF["CloudFront"]
+    CF -->|"HTTP origin"| ALB["Application Load Balancer"]
     ALB --> FE["ECS/Fargate · Frontend"]
     FE -->|"privátní REST"| API["ECS/Fargate · Loan API"]
     API -->|"JDBC/TLS"| PG[("PostgreSQL")]
@@ -38,7 +40,7 @@ flowchart TB
     SM --> W
 ```
 
-ECS tasky běží v privátních subnetech bez veřejných IP adres. ALB je jediným veřejným vstupem; databáze, broker, API a worker přijímají provoz pouze z odpovídajících security groups.
+ECS tasky běží v privátních subnetech bez veřejných IP adres. CloudFront je preferovaný veřejný vstup; databáze, broker, API a worker přijímají provoz pouze z odpovídajících security groups. ALB zůstává veřejně dosažitelným HTTP originem, což je explicitní kompromis varianty bez vlastní domény.
 
 ## Varianta A — ukázkové prostředí
 
@@ -52,7 +54,7 @@ Krátkodobá varianta zachovává plný aplikační a event-driven tok při kont
 
 Single-AZ databáze a jednouzlový broker neposkytují vysokou dostupnost. Nahrazení Kafka tasku odstraní lokální broker data. Varianta je určená výhradně pro fiktivní data a nemá produkční SLA.
 
-ALB v této variantě používá HTTP, aby celý aplikační lifecycle zůstal uvnitř CDK bez ručně spravovaného DNS a certifikátu. Produkční varianta vyžaduje HTTPS s ACM certifikátem, spravovaný DNS záznam a odpovídající TLS policy.
+CloudFront poskytuje TLS na výchozí doméně AWS a přesměruje HTTP na HTTPS. Výchozí certifikát neumožňuje nastavit vlastní minimální TLS policy. Spojení CloudFront → ALB zůstává HTTP a přímý origin není uzamčený pouze na CloudFront. Produkční varianta používá vlastní doménu, ACM certifikát s řízenou TLS policy, HTTPS také k originu a omezení přístupu k ALB.
 
 ## Varianta B — produkční prostředí
 

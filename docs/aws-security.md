@@ -7,7 +7,8 @@ Dokument stanovuje ochranné mechanismy [cílové AWS architektury](aws-architec
 - žádné dlouhodobé AWS access keys v GitHubu, ECS tasku, image ani repozitáři;
 - GitHub Actions používá krátkodobé přihlašovací údaje přes OIDC a `AssumeRoleWithWebIdentity`;
 - každá runtime role má pouze oprávnění potřebná pro svůj proces;
-- veřejně přístupný je pouze ALB; krátkodobá varianta používá port 80, produkční varianta výhradně HTTPS na portu 443;
+- preferovaným veřejným vstupem je CloudFront s HTTPS a přesměrováním HTTP;
+- ALB přijímá HTTP od CloudFront a zůstává přímo dosažitelný jako explicitní kompromis prostředí bez vlastní domény;
 - produkční data jsou šifrovaná při přenosu i v klidu;
 - secrets se nepropagují do logů, build arguments ani image layers;
 - ukázkové prostředí používá výhradně fiktivní data.
@@ -25,7 +26,7 @@ VPC má veřejné subnety pouze pro ALB a dvě izolované aplikační subnety pr
 | `kafka-sg` | `application-sg:19092` | DNS a privátní AWS endpoints |
 | `endpoint-sg` | frontend, application a Kafka SG na `443` | odpovědi na navázaná spojení |
 
-Security groups se odkazují navzájem, nepoužívají široké CIDR rozsahy pro datové porty. ECS tasky nemají public IP. Krátkodobá varianta nemá certifikát mimo CDK, a proto veřejný vstup nešifruje; pracuje výhradně s fiktivními daty. Produkční varianta přesměruje HTTP na HTTPS a TLS policy zakáže zastaralé protokoly.
+Security groups se odkazují navzájem, nepoužívají široké CIDR rozsahy pro datové porty. ECS tasky nemají public IP. CloudFront ukončuje veřejné TLS pomocí spravovaného certifikátu pro doménu AWS a přidává HSTS i další browser security headers. Výchozí certifikát neumožňuje vlastní minimální TLS policy. Produkční varianta používá vlastní doménu a ACM certifikát, šifruje spojení k originu a omezuje ALB pouze na důvěryhodný edge provoz.
 
 ## IAM role
 

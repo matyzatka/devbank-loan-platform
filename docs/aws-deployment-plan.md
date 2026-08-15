@@ -8,7 +8,7 @@ První spuštění nelze bezpečně řešit jediným stackem: ECS může odkazov
 
 1. `DevBankDemo-Images-eu-central-1` vytvoří tři ECR repositories.
 2. Wrapper sestaví backend a frontend z existujících Dockerfile, označí je immutable Git SHA a nahraje je do ECR. Kontrolovaný `apache/kafka-native:3.8.0` zrcadlí do privátního repository.
-3. `DevBankDemo-eu-central-1` vytvoří síť, RDS, ECS služby, ALB, service discovery, secret a log groups s odkazy pouze na existující image.
+3. `DevBankDemo-eu-central-1` vytvoří síť, RDS, ECS služby, ALB, CloudFront, service discovery, secret a log groups s odkazy pouze na existující image.
 
 Odstranění probíhá opačně. Standardní bootstrap stack `CDKToolkit` není součástí aplikačního lifecycle a skripty jej nikdy nemažou.
 
@@ -18,7 +18,7 @@ flowchart LR
     SYNTH --> CONFIRM["Explicitní potvrzení"]
     CONFIRM --> ECR["Images stack: ECR repositories"]
     ECR --> PUSH["Build a push image s immutable tagy"]
-    PUSH --> APP["Application stack: RDS, ECS, ALB a observabilita"]
+    PUSH --> APP["Application stack: RDS, ECS, ALB, CloudFront a observabilita"]
     APP --> DEMO["DevBank demo"]
     DEMO --> DESTROY["Application stack → Images stack"]
     DESTROY --> AUDIT["Audit zbytkových resources; CDKToolkit zůstává"]
@@ -40,7 +40,7 @@ npm run aws:audit
 
 `aws:destroy` vypíše fyzické resources obou přesně pojmenovaných stacků a pokračuje pouze po zadání `DESTROY DEVBANK DEMO`. Odstraní aplikační stack, následně images stack a spustí audit. Nepoužívá `--all` ani wildcard.
 
-`aws:audit` kontroluje CloudFormation stacky, ECS služby a tasky, RDS, ALB, ECR, Secrets Manager, CloudWatch log groups, VPC a endpoints. Nalezené zbytky vracejí nenulový exit code; stav `CDKToolkit` je pouze informativní.
+`aws:audit` kontroluje CloudFormation stacky, ECS služby a tasky, RDS, ALB, CloudFront, ECR, Secrets Manager, CloudWatch log groups, VPC a endpoints. Nalezené zbytky vracejí nenulový exit code; stav `CDKToolkit` je pouze informativní.
 
 ## Resources spravované CDK
 
@@ -50,10 +50,10 @@ npm run aws:audit
 | Application | VPC, 2 veřejné a 2 izolované subnety, Internet Gateway pro ALB, route tables, 4 interface endpoints a S3 gateway endpoint |
 | Application | 6 security groups; RDS PostgreSQL 17 Single-AZ; DB subnet group; generovaný Secrets Manager secret |
 | Application | ECS cluster, 4 task definitions a služby: frontend, Loan API, Processing Worker a single-broker Kafka |
-| Application | private service discovery, veřejný HTTP ALB, target group a 5 CloudWatch log groups s retencí 7 dnů |
+| Application | private service discovery, ALB origin, CloudFront HTTPS distribuce, target group a 5 CloudWatch log groups s retencí 7 dnů |
 | Application | minimální runtime/execution IAM role a standardní CDK custom resource pro restrikci default security group |
 
-Skeleton nevytváří NAT Gateway, EFS, MSK, autoscaling, Multi-AZ RDS, DNS, certifikát ani zdroje mimo oba stacky. Veřejný HTTP listener je vědomý kompromis krátkodobé varianty bez externě spravovaného DNS/certifikátu. Pro reálný provoz je povinný HTTPS endpoint s ACM a DNS.
+Skeleton nevytváří NAT Gateway, EFS, MSK, autoscaling, Multi-AZ RDS, vlastní DNS ani zdroje mimo oba stacky. CloudFront poskytuje HTTPS na výchozí doméně AWS; veřejný HTTP origin je vědomý kompromis krátkodobé varianty bez vlastní domény. Pro reálný provoz se používá vlastní DNS, ACM a TLS i mezi edge a originem.
 
 ## Destrukční politika demo varianty
 
@@ -65,9 +65,9 @@ Skeleton nevytváří NAT Gateway, EFS, MSK, autoscaling, Multi-AZ RDS, DNS, cer
 
 ## Náklady a provozní rizika
 
-Největší fixní položky tvoří čtyři Fargate tasky, RDS, ALB a interface endpointy účtované v každé AZ. Další náklady vznikají za CloudWatch ingest, ECR storage, Secrets Manager a přenos dat. Cena se musí před deployem ověřit pro `eu-central-1` v AWS Pricing Calculatoru.
+Největší fixní položky tvoří čtyři Fargate tasky, RDS, ALB a interface endpointy účtované v každé AZ. Další náklady vznikají za CloudFront požadavky a přenos dat, CloudWatch ingest, ECR storage a Secrets Manager. Cena se musí před deployem ověřit pro `eu-central-1` v AWS Pricing Calculatoru.
 
-Single-AZ RDS, jeden Kafka broker, jeden task na službu, HTTP vstup a absence autoscalingu neposkytují produkční dostupnost ani bezpečnostní profil. Nahrazení Kafka tasku ztrácí broker data; rolling deployment může krátce přerušit službu. Tyto kompromisy drží krátkodobé prostředí s fiktivními daty čitelné a nákladově omezené, nikoli produkční.
+Single-AZ RDS, jeden Kafka broker, jeden task na službu, HTTP spojení k originu a absence autoscalingu neposkytují produkční dostupnost ani bezpečnostní profil. Nahrazení Kafka tasku ztrácí broker data; rolling deployment může krátce přerušit službu. Tyto kompromisy drží krátkodobé prostředí s fiktivními daty čitelné a nákladově omezené, nikoli produkční.
 
 Produkční varianta vyžaduje minimálně TLS, autentizaci a autorizaci, WAF, redundantní ECS služby, Multi-AZ RDS, managed Kafka, oddělený migrační task, alarmy, zálohovací/restore testy a schválený disaster-recovery model.
 
