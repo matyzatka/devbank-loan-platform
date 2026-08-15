@@ -1,4 +1,6 @@
 import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import * as cdk from 'aws-cdk-lib'
 import { Template } from 'aws-cdk-lib/assertions'
 import { DevBankDemoStack } from '../lib/devbank-demo-stack'
@@ -83,6 +85,18 @@ assert.match(
   JSON.stringify(databaseIngress[0]?.[1].Properties?.SourceSecurityGroupId),
   /ApplicationSecurityGroup/,
   'PostgreSQL ingress must originate from the application task security group',
+)
+
+const deployScript = readFileSync(resolve(__dirname, '../../../scripts/aws-demo-deploy.ps1'), 'utf8')
+assert.match(
+  deployScript,
+  /\$script:DevBankApplicationStack\):ApplicationImageTag=/,
+  'CDK parameters must be qualified by the physical CloudFormation stack name',
+)
+assert.doesNotMatch(
+  deployScript,
+  /\$script:DevBankApplicationStackId\):(?:ApplicationImageTag|KafkaImageTag)=/,
+  'CDK construct IDs must not qualify CloudFormation parameters',
 )
 
 for (const [logicalId, resource] of Object.entries({

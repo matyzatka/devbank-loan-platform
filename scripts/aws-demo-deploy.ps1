@@ -64,5 +64,5 @@ if (-not (Test-EcrTag 'devbank/kafka' '3.8.0')) {
     Invoke-CheckedNative docker push "$registry/devbank/kafka:3.8.0"
 }
 
-Invoke-Cdk deploy $script:DevBankApplicationStackId --exclusively --require-approval never --parameters "$($script:DevBankApplicationStackId):ApplicationImageTag=$sha" --parameters "$($script:DevBankApplicationStackId):KafkaImageTag=3.8.0"
+Invoke-Cdk deploy $script:DevBankApplicationStackId --exclusively --require-approval never --parameters "$($script:DevBankApplicationStack):ApplicationImageTag=$sha" --parameters "$($script:DevBankApplicationStack):KafkaImageTag=3.8.0"
 & (Join-Path $PSScriptRoot 'aws-demo-status.ps1') -ExpectedAccountId $context.Account
