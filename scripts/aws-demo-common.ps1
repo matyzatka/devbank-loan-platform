@@ -38,7 +38,13 @@ function Invoke-AwsText {
         $ErrorActionPreference = $previousErrorActionPreference
     }
 
-    if ($exitCode -eq 0) { return ($output -join [Environment]::NewLine).Trim() }
+    if ($exitCode -eq 0) {
+        $value = ($output -join [Environment]::NewLine).Trim()
+        # AWS CLI text output represents an empty JMESPath scalar as `None`.
+        # Treat it as no finding so cleanup audits do not report phantom resources.
+        if ($value -eq 'None') { return $null }
+        return $value
+    }
     $message = ($output -join [Environment]::NewLine).Trim()
     if ($AllowedMissingPattern -and $message -match $AllowedMissingPattern) { return $null }
     throw "AWS CLI failed ($exitCode): aws $($Arguments -join ' ')`n$message"

@@ -37,7 +37,7 @@ foreach ($repository in $script:DevBankRepositories) {
     if ($value) { $findings.Add("ECR repository: $repository") }
 }
 
-Write-Host "$script:DevBankToolkitStack: $(Get-StackStatus $script:DevBankToolkitStack) (intentionally untouched)"
+Write-Host "${script:DevBankToolkitStack}: $(Get-StackStatus $script:DevBankToolkitStack) (intentionally untouched)"
 if ($findings.Count -gt 0) {
     Write-Warning 'DevBank demo resources remain:'
     $findings | ForEach-Object { Write-Host " - $_" }
